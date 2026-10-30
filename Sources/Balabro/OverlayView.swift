@@ -52,26 +52,18 @@ struct OverlayContent: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
-            if let advice = view.advice, !advice.doNow.isEmpty {
-                // Scrolls only when the steps alone are too tall for the panel, so the question box stays on screen.
-                ViewThatFits(in: .vertical) {
-                    pinned(advice)
-                    ScrollView { pinned(advice) }.scrollIndicators(.never)
+            // The steps stay pinned while there's room for the rest under them. Otherwise everything scrolls
+            // together, so nothing is out of reach. The ideal height is what makes the first layout count as fitting.
+            ViewThatFits(in: .vertical) {
+                VStack(spacing: 0) {
+                    pinnedSteps
+                    scrolling(content)
+                        .frame(idealHeight: 80, maxHeight: .infinity)
                 }
-                .layoutPriority(1)
-            }
-            ScrollViewReader { scroll in
-                ScrollView {
+                scrolling(VStack(spacing: 0) {
+                    pinnedSteps
                     content
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .id(Self.contentID)
-                }
-                .scrollIndicators(.never)
-                .onChange(of: view.thread) {
-                    if !view.thread.isEmpty { scroll.scrollTo(Self.contentID, anchor: .bottom) }
-                }
+                })
             }
             if let queued = view.queuedQuestion {
                 Text("Next: \(queued)")
@@ -96,11 +88,26 @@ struct OverlayContent: View {
 
     private static let contentID = "content"
 
-    private func pinned(_ advice: Advice) -> some View {
-        DoThisNow(steps: advice.doNow, score: advice.score, sawScreen: view.sawScreen)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
+    @ViewBuilder private var pinnedSteps: some View {
+        if let advice = view.advice, !advice.doNow.isEmpty {
+            DoThisNow(steps: advice.doNow, score: advice.score, sawScreen: view.sawScreen)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+        }
+    }
+
+    private func scrolling(_ inner: some View) -> some View {
+        ScrollViewReader { scroll in
+            ScrollView {
+                inner
+                    .id(Self.contentID)
+            }
+            .scrollIndicators(.never)
+            .onChange(of: view.thread) {
+                if !view.thread.isEmpty { scroll.scrollTo(Self.contentID, anchor: .bottom) }
+            }
+        }
     }
 
     private var header: some View {
@@ -133,7 +140,14 @@ struct OverlayContent: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
+    private var content: some View {
+        scrolledContent
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+    }
+
+    @ViewBuilder private var scrolledContent: some View {
         if view.advice != nil || !view.thread.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 if let advice = view.advice {
