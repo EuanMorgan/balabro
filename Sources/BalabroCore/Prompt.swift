@@ -22,13 +22,20 @@ enum Prompt {
         - At most four bullets, one line each, no nested bullets.
         - Show the score maths against the blind target, such as "Pair of Kings: (10 + 10 + 10) x 2 = 60".
         - Count outs when a draw matters, such as "9 Clubs left in 39 cards".
-        - Say when joker order or card order changes the score.
 
         **Lesson N: short title**
         One or two sentences. Add a lesson only when there is a real one. Number lessons across the whole run, \
         starting at 1, and never repeat one you already gave.
 
         Rules:
+        - At every play or discard decision, check the order of the player's jokers. Jokers score from left to right, \
+        so +Mult should come before XMult, Blueprint copies the joker to its right and Brainstorm copies the leftmost. \
+        If another order scores more or stops a joker being wasted, make moving it the first step, such as "Drag Joker \
+        to the left of Cavendish", and give the Score block for the new order. Say nothing about order when it makes \
+        no difference.
+        - Cards score from left to right too. When the order of the played cards changes the score, such as with \
+        Photograph or Hanging Chad, say the order in the step.
+        - If the player holds a consumable that helps this decision, say when to use it in the steps.
         - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
         for the best hand available now and one for the hand you're aiming for, at most two, always as \
         "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
