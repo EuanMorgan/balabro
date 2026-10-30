@@ -139,17 +139,23 @@ struct OverlayContent: View {
                 }
             }
         } else {
-            switch view.status {
-            case .waitingForRun:
-                Placeholder(title: "Waiting for a run",
-                            detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
-            case .lookingAtPack:
-                Placeholder(title: "Looking at the pack", detail: "Taking a screenshot once the cards land.")
-            case .thinking, .answering:
-                Placeholder(title: "Reading the board")
-            case .ready:
-                Placeholder(title: "Ready", detail: "Ask anything about this run below.")
+            if let kind = view.waitingOn {
+                WaitingView(kind: kind)
+            } else {
+                placeholder
             }
+        }
+    }
+
+    @ViewBuilder private var placeholder: some View {
+        switch view.status {
+        case .waitingForRun:
+            Placeholder(title: "Waiting for a run",
+                        detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
+        case .lookingAtPack, .thinking, .answering:
+            Placeholder(title: "Reading the board")
+        case .ready:
+            Placeholder(title: "Ready", detail: "Ask anything about this run below.")
         }
     }
 }
@@ -211,9 +217,7 @@ struct AdviceView: View {
             if !advice.rest.isEmpty {
                 SuitText(advice.rest, size: 13).foregroundStyle(Theme.text.opacity(0.88))
             }
-            if streaming {
-                Text("…").font(Theme.pixelFont(2)).foregroundStyle(Theme.chips)
-            }
+            if streaming { ThinkingDots() }
         }
         .textSelection(.enabled)
     }
@@ -289,9 +293,7 @@ private struct FollowUpThread: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.chips)
                     }
-                    if waiting, index == thread.count - 1 {
-                        Text("…").font(Theme.pixelFont(2)).foregroundStyle(Theme.chips)
-                    }
+                    if waiting, index == thread.count - 1 { ThinkingDots() }
                 }
             }
         }
@@ -494,7 +496,7 @@ private struct ChipButton: View {
     }
 }
 
-private struct ChipTile: View {
+struct ChipTile: View {
     var face = Theme.chips
     var lip = Theme.chipsDeep
 

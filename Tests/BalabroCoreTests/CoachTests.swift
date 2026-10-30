@@ -306,6 +306,27 @@ struct CoachTests {
         #expect(state.view.advice?.score == [])
     }
 
+    @Test func waitingNamesTheDecisionUntilTheFirstWordsArrive() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        #expect(state.view.waitingOn == .shop)
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .text("**Do")))
+        #expect(state.view.waitingOn == nil)
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Leave.", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        #expect(state.view.waitingOn == nil)
+    }
+
+    @Test func waitingCoversThePackScreenshot() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        #expect(state.view.status == .lookingAtPack)
+        guard case .openPack? = state.view.waitingOn else {
+            Issue.record("expected a pack, got \(String(describing: state.view.waitingOn))")
+            return
+        }
+    }
+
     @Test func roundEndSaysNothing() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)

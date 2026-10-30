@@ -14,6 +14,7 @@ enum Theme {
     static let mult = Color(hex: 0xFE5F55)       // G.C.MULT
     static let multDeep = Color(hex: 0xB2433C)   // darken(G.C.MULT, 0.3), a button's lip
     static let money = Color(hex: 0xF3B958)      // G.C.MONEY
+    static let moneyDeep = Color(hex: 0xAA813E)  // darken(G.C.MONEY, 0.3)
 
     /// "m6x11plus" when `GameInstall.registerFont` succeeded, else SF Mono. Pixel fonts blur at
     /// fractional sizes, so sizes are whole multiples of the font's 11 px design size.

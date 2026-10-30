@@ -172,7 +172,8 @@ public struct CoachState: Sendable {
         let canRetry = retryable != nil && activity.isIdle
         if let decision = activity.purpose?.decision {
             return CoachView(
-                status: status, headline: decision.title, standing: standing, advice: partial.isEmpty ? nil : Advice(markdown: partial), thread: [],
+                status: status, headline: decision.title, standing: standing, waitingOn: partial.isEmpty ? decision.kind : nil,
+                advice: partial.isEmpty ? nil : Advice(markdown: partial), thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
         let history = current.flatMap { runs[$0] }?.transcript ?? []
@@ -349,6 +350,8 @@ public struct CoachView: Sendable, Equatable {
     public var headline: String
     /// Read from the newest save, so it's right even while Claude is still answering.
     public var standing: Standing?
+    /// The decision Claude is working on, until its first words arrive.
+    public var waitingOn: Decision.Kind?
     /// The current plan, parsed even while partial so "Do this now" shows as soon as it streams.
     public var advice: Advice?
     /// The player's questions about the current decision. A new decision starts it empty.
@@ -357,8 +360,8 @@ public struct CoachView: Sendable, Equatable {
     public var problem: Problem?
     public var canRetry: Bool
 
-    public init(status: Status, headline: String, standing: Standing? = nil, advice: Advice?, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
-        (self.status, self.headline, self.standing, self.advice, self.thread) = (status, headline, standing, advice, thread)
+    public init(status: Status, headline: String, standing: Standing? = nil, waitingOn: Decision.Kind? = nil, advice: Advice?, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        (self.status, self.headline, self.standing, self.waitingOn, self.advice, self.thread) = (status, headline, standing, waitingOn, advice, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
     }
 
