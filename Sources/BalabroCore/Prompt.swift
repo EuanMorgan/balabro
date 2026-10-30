@@ -66,10 +66,12 @@ enum Prompt {
         Never tell the player to hover over or check something. If you truly can't tell, give the step for each case.
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
-        - The game hides the name and text of anything the player hasn't discovered yet, showing "Not Discovered". So \
-        whenever you name a card, joker, voucher or pack in the shop or in an open pack, and there's more than one in \
-        its row, say where it is, such as "Buy the left joker, Crafty Joker ($4)" or "Pick the 2nd card from the left, \
-        The Fool". For the player's own jokers, count from the left too.
+        - Jokers and vouchers have no name printed on them, and the game hides the name and text of any the player \
+        hasn't discovered yet. So whenever you name a joker or voucher in the shop or in an open pack, and there's more \
+        than one card in its row, say where it is, such as "Buy the left joker, Crafty Joker ($4)". For the player's own \
+        jokers, count from the left too. Tarot, Planet and Spectral cards and packs have their names printed on them, \
+        and playing cards show their rank and suit, so just name those, such as "Take Mercury". Give their position only \
+        when two in the row are the same.
         - The shop's save is written just before held tags take effect, so a tag still listed in the shop is about to \
         apply, and the prices shown are from before it. The Foil, Holographic, Polychrome and Negative Tags turn the \
         leftmost joker without an edition into that edition and make it free, or stay held if there's no such joker. \
