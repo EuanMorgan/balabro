@@ -50,6 +50,8 @@ enum Prompt {
         changes the plan.
         - Keep a running plan for the run (the hand type to build, the jokers to look for). Mention it only when it changes.
         - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
+        - The state already includes everything the game shows on hover, such as this round's rank for Mail-In Rebate. \
+        Never tell the player to hover over or check something. If you truly can't tell, give the step for each case.
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
         - The game hides the name and text of anything the player hasn't discovered yet, showing "Not Discovered". So \
@@ -95,7 +97,7 @@ enum Prompt {
         }
         lines += jokerLines(s, text)
         lines.append("Consumables (\(s.consumables.count)/\(s.consumableSlots)): "
-            + (s.consumables.isEmpty ? "none" : s.consumables.map { describe($0.key, edition: $0.edition, text) }.joined(separator: "; ")))
+            + (s.consumables.isEmpty ? "none" : s.consumables.map { describe($0.key, edition: $0.edition, s, text) }.joined(separator: "; ")))
         if !s.tags.isEmpty { lines.append("Skip tags held: " + s.tags.map { name($0, text) }.joined(separator: ", ")) }
         if !s.vouchers.isEmpty { lines.append("Vouchers redeemed: " + s.vouchers.map { name($0, text) }.joined(separator: ", ")) }
         lines.append("Poker hands: " + s.pokerHands.map(pokerHand).joined(separator: ", "))
@@ -188,10 +190,10 @@ enum Prompt {
             lines.append("\(row) (left to right):")
             for item in items {
                 let description: String = switch item.card {
-                case .joker(let j): joker(j, text, kind: "joker", sellValue: false)
-                case .consumable(let c): describe(c.key, edition: c.edition, text)
+                case .joker(let j): joker(j, s, text, kind: "joker", sellValue: false)
+                case .consumable(let c): describe(c.key, edition: c.edition, s, text)
                 case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
-                case .voucher(let key): describe(key, edition: nil, text, kind: "voucher")
+                case .voucher(let key): describe(key, edition: nil, s, text, kind: "voucher")
                 case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
                 }
                 lines.append("- $\(item.cost) \(description)")
@@ -202,10 +204,10 @@ enum Prompt {
 
     private static func jokerLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
         let header = "Jokers (left to right, \(s.jokers.count)/\(s.jokerSlots)):"
-        return s.jokers.isEmpty ? [header + " none"] : [header] + s.jokers.map { "- " + joker($0, text) }
+        return s.jokers.isEmpty ? [header + " none"] : [header] + s.jokers.map { "- " + joker($0, s, text) }
     }
 
-    private static func joker(_ j: Joker, _ text: GameText, kind: String? = nil, sellValue: Bool = true) -> String {
+    private static func joker(_ j: Joker, _ s: RunSnapshot, _ text: GameText, kind: String? = nil, sellValue: Bool = true) -> String {
         var tags: [String] = kind.map { [$0] } ?? []
         if let e = j.edition { tags.append(e.rawValue.capitalized) }
         tags += j.stickers.map(\.rawValue.capitalized).sorted()
@@ -215,12 +217,29 @@ enum Prompt {
         if !j.liveValues.isEmpty {
             line += " [" + j.liveValues.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", ") + "]"
         }
+        line += hoverOnly(j.key, s, text)
         return sellValue ? line + " Sells for $\(j.sellValue)." : line
     }
 
-    private static func describe(_ key: CenterKey, edition: Edition?, _ text: GameText, kind: String? = nil) -> String {
+    private static func describe(_ key: CenterKey, edition: Edition?, _ s: RunSnapshot, _ text: GameText, kind: String? = nil) -> String {
         let tags = [kind, edition?.rawValue.capitalized].compactMap { $0 }
-        return name(key, text) + (tags.isEmpty ? "" : " (\(tags.joined(separator: ", ")))") + template(key, text)
+        return name(key, text) + (tags.isEmpty ? "" : " (\(tags.joined(separator: ", ")))") + template(key, text) + hoverOnly(key, s, text)
+    }
+
+    /// Facts the game shows in a card's tooltip but keeps outside the card.
+    private static func hoverOnly(_ key: CenterKey, _ s: RunSnapshot, _ text: GameText) -> String {
+        let targets = s.roundTargets
+        func fact(_ label: String, _ value: String?) -> String { value.map { " \(label): \($0)." } ?? "" }
+        return switch key.rawValue {
+        case "j_mail": fact("This round's rank", targets.mailRank?.rawValue)
+        case "j_idol":
+            fact("This round's card", targets.idolRank.flatMap { rank in targets.idolSuit.map { "\(rank.rawValue) of \($0.rawValue)" } })
+        case "j_ancient": fact("This round's suit", targets.ancientSuit?.rawValue)
+        case "j_castle": fact("This round's suit", targets.castleSuit?.rawValue)
+        case "j_fortune_teller": fact("Tarot cards used this run", String(s.tarotsUsed))
+        case "c_fool": fact("Would copy", s.lastTarotOrPlanet.map { name($0, text) } ?? "nothing yet")
+        default: ""
+        }
     }
 
     /// ": text." with the template's lines joined, or "" when the game text isn't loaded.

@@ -82,4 +82,33 @@ struct DecisionTests {
         #expect(prompt.contains("Cards (left to right):\n- $3 "))
         #expect(prompt.contains("Vouchers (left to right):\n- $10 "))
     }
+
+    func prompt(_ save: String, owning joker: String) throws -> String {
+        var snapshot = try SaveFile.decode(Fixture.save(save), profile: 1)
+        snapshot.jokers[0].key = CenterKey(rawValue: joker)
+        return try #require(Decision.detect(in: snapshot, text: .missing)?.prompt)
+    }
+
+    @Test(arguments: [
+        ("j_mail", "This round's rank: Ace."),
+        ("j_idol", "This round's card: 2 of Diamonds."),
+        ("j_ancient", "This round's suit: Hearts."),
+        ("j_castle", "This round's suit: Diamonds."),
+        ("j_fortune_teller", "Tarot cards used this run: 0."),
+    ])
+    func promptGivesWhatTheGameOnlyShowsOnHover(joker: String, fact: String) throws {
+        #expect(try prompt("10-hand", owning: joker).contains(fact))
+    }
+
+    @Test func otherJokersGetNoRoundFact() throws {
+        #expect(try !prompt("10-hand", owning: "j_joker").contains("This round's"))
+    }
+
+    @Test func theFoolSaysWhatItWouldCopy() throws {
+        var snapshot = try SaveFile.decode(Fixture.save("10-hand"), profile: 1)
+        snapshot.consumables = [Consumable(key: CenterKey(rawValue: "c_fool"))]
+        #expect(try #require(Decision.detect(in: snapshot, text: .missing)?.prompt).contains("Would copy: nothing yet."))
+        snapshot.lastTarotOrPlanet = CenterKey(rawValue: "c_mercury")
+        #expect(try #require(Decision.detect(in: snapshot, text: .missing)?.prompt).contains("Would copy: c_mercury."))
+    }
 }

@@ -156,6 +156,13 @@ extension RunSnapshot {
         tags = root.child("tags")?.elements.compactMap { $0.child("key")?.string.map(TagKey.init) } ?? []
         vouchers = (game.child("used_vouchers")?.table?.named.filter { $0.value == .bool(true) }.keys.sorted() ?? [])
             .map(CenterKey.init)
+        lastTarotOrPlanet = game.child("last_tarot_planet")?.string.map(CenterKey.init)
+        tarotsUsed = game.child("consumeable_usage_total")?.child("tarot")?.number.map { Int($0) } ?? 0
+        func rank(_ card: String) -> Rank? { current.child(card)?.child("rank")?.string.flatMap(Rank.init) }
+        func suit(_ card: String) -> Suit? { current.child(card)?.child("suit")?.string.flatMap(Suit.init) }
+        roundTargets = RoundTargets(
+            mailRank: rank("mail_card"), idolRank: rank("idol_card"), idolSuit: suit("idol_card"),
+            ancientSuit: suit("ancient_card"), castleSuit: suit("castle_card"))
     }
 
     private static func blind(_ node: Node?) throws(SaveFileError) -> Blind? {

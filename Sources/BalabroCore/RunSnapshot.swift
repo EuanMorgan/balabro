@@ -39,6 +39,21 @@ public struct RunSnapshot: Sendable, Hashable, Codable {
     /// Skip tags the player holds, oldest first. Unapplied pack tags signal an unseen booster.
     public var tags: [TagKey]
     public var vouchers: [CenterKey]
+    /// What The Fool would copy.
+    public var lastTarotOrPlanet: CenterKey?
+    /// Fortune Teller's mult comes from this count, not from the joker's own values.
+    public var tarotsUsed: Int
+    public var roundTargets: RoundTargets
+}
+
+/// What the "changes every round" jokers want right now. The game only shows these on hover, and
+/// reads them from `GAME.current_round`, not from the joker.
+public struct RoundTargets: Sendable, Hashable, Codable {
+    public var mailRank: Rank?
+    public var idolRank: Rank?
+    public var idolSuit: Suit?
+    public var ancientSuit: Suit?
+    public var castleSuit: Suit?
 }
 
 /// The game's `STATE` number, reduced to the cases the coach cares about.
@@ -168,6 +183,8 @@ public struct Consumable: Sendable, Hashable, Codable {
     public var key: CenterKey
     public var edition: Edition?
     public var sellValue: Int
+
+    public init(key: CenterKey, edition: Edition? = nil, sellValue: Int = 0) { (self.key, self.edition, self.sellValue) = (key, edition, sellValue) }
 }
 
 public struct Shop: Sendable, Hashable, Codable {
