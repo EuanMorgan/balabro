@@ -30,14 +30,36 @@ public struct ClaudeInvocation: Sendable, Hashable {
     /// `--strict-mcp-config --setting-sources ""`: skip the user's MCP servers, hooks and CLAUDE.md
     /// (9.5 s -> 2.8 s measured) while keeping their subscription login. Not `--bare`: it drops the login.
     /// Forked turns still hit the prompt cache: on Sonnet, turns 2 and 3 read 7,838 and 8,444 cached tokens.
-    public func arguments(forkFrom: SessionID?) -> [String] { fatalError("not implemented") }
+    public func arguments(forkFrom: SessionID?) -> [String] {
+        var args = [
+            "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+            "--model", model, "--system-prompt", Prompt.system,
+            "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands",
+        ]
+        if let forkFrom { args += ["--resume", forkFrom.rawValue, "--fork-session"] }
+        return args
+    }
 
     /// HOME and USER from the app, PATH from `searchPath`, CLAUDE_CONFIG_DIR from `configDir` if set.
-    public func environment(inheriting env: [String: String]) -> [String: String] { fatalError("not implemented") }
+    public func environment(inheriting env: [String: String]) -> [String: String] {
+        var out = env.filter { $0.key == "HOME" || $0.key == "USER" }
+        out["PATH"] = searchPath
+        if let configDir { out["CLAUDE_CONFIG_DIR"] = configDir.path(percentEncoded: false) }
+        return out
+    }
 
-    /// The single stdin line: `{"type":"user","message":{"role":"user","content":[text, image?]}}`.
-    /// The image is a base64 PNG content block, so it needs no tool and no temp file.
-    public static func stdinLine(_ message: UserMessage) -> Data { fatalError("not implemented") }
+    /// The single stdin line: `{"type":"user","message":{"role":"user","content":[image?, text]}}`.
+    /// The image is a base64 PNG content block, so it needs no tool and no temp file. It goes before the text,
+    /// as Anthropic recommends for image prompts.
+    public static func stdinLine(_ message: UserMessage) -> Data {
+        var content: [[String: Any]] = []
+        if let png = message.screenshotPNG {
+            content.append(["type": "image", "source": ["type": "base64", "media_type": "image/png", "data": png.base64EncodedString()]])
+        }
+        content.append(["type": "text", "text": message.text])
+        let line: [String: Any] = ["type": "user", "message": ["role": "user", "content": content]]
+        return try! JSONSerialization.data(withJSONObject: line, options: [.sortedKeys, .withoutEscapingSlashes]) + Data("\n".utf8)
+    }
 }
 
 public enum TurnOutput: Sendable, Hashable {
@@ -61,15 +83,49 @@ public enum TurnFailure: Sendable, Hashable {
 /// `content_block_delta.text_delta` (the streamed text), `assistant` (whole message, ignored: the
 /// deltas already carried it), `rate_limit_event`, and a final object with `result`, `session_id`, `is_error`.
 public struct StreamDecoder: Sendable {
+    private var sawResult = false
+
     public init() {}
 
-    /// Returns nil for lines that carry nothing the coach uses. Unknown line types are ignored, not errors,
-    /// so a CLI update that adds event types doesn't break coaching.
-    public mutating func feed(_ line: Data) -> TurnOutput? { fatalError("not implemented") }
+    /// Returns nil for lines that carry nothing the coach uses. Unknown line types and lines that aren't JSON
+    /// are ignored, not errors, so a CLI update that adds event types doesn't break coaching.
+    public mutating func feed(_ line: Data) -> TurnOutput? {
+        guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return nil }
+        switch object["type"] as? String {
+        case "system" where object["subtype"] as? String == "init":
+            return (object["session_id"] as? String).map { .started(SessionID(rawValue: $0)) }
+        case "stream_event":
+            guard let event = object["event"] as? [String: Any], event["type"] as? String == "content_block_delta",
+                  let delta = event["delta"] as? [String: Any], delta["type"] as? String == "text_delta",
+                  let text = delta["text"] as? String else { return nil }
+            return .text(text)
+        case "result":
+            sawResult = true
+            let text = object["result"] as? String ?? ""
+            if object["is_error"] as? Bool == true { return .failed(Self.failure(fromResult: text)) }
+            guard let session = object["session_id"] as? String else { return .failed(.malformedOutput) }
+            return .done(text, SessionID(rawValue: session))
+        default:
+            return nil
+        }
+    }
 
     /// Call when the process exits. Turns "exited without a result line" into `.failed`.
     public mutating func finish(status: Int32, stderr: String) -> TurnOutput? {
-        // TODO: stderr containing "Not logged in" -> .notLoggedIn; otherwise .exited(status, last 400 chars).
-        fatalError("not implemented")
+        guard !sawResult else { return nil }
+        if stderr.contains("Not logged in") { return .failed(.notLoggedIn) }
+        if status == 0 { return .failed(.malformedOutput) }
+        return .failed(.exited(status: status, stderrTail: String(stderr.suffix(400))))
+    }
+
+    /// The CLI reports usage limits as an error result such as `Claude AI usage limit reached|1760000000`,
+    /// where the number is when the limit resets.
+    private static func failure(fromResult text: String) -> TurnFailure {
+        if text.contains("Not logged in") { return .notLoggedIn }
+        if text.lowercased().contains("limit") {
+            let resetsAt = text.split(separator: "|").last.flatMap { TimeInterval($0) }.map(Date.init(timeIntervalSince1970:))
+            return .rateLimited(resetsAt: resetsAt)
+        }
+        return .exited(status: 0, stderrTail: String(text.suffix(400)))
     }
 }

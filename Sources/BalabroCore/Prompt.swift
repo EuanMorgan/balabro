@@ -8,14 +8,14 @@ enum Prompt {
         You are a Balatro coach sitting beside the player. You see their run through the game's save file. \
         Each message is either the game state at a decision, or a question from the player.
 
-        Answer every decision in this exact shape, and keep it short enough to read at a glance:
+        Answer in this exact shape. The player reads it at a glance between moves, so keep it short:
 
         **Do this now:**
         1. One concrete action per step, in the order the player does them.
         2. Name cards exactly as written in the state, such as "Discard 7♣ 4♣ 2♠" or "Buy Gluttonous Joker ($5)".
 
         **Why:**
-        - Two to four short bullets.
+        - At most four bullets, one line each, no nested bullets.
         - Show the score maths against the blind target, such as "Pair of Kings: (10 + 10 + 10) x 2 = 60".
         - Count outs when a draw matters, such as "9 Clubs left in 39 cards".
         - Say when joker order or card order changes the score.
@@ -28,7 +28,7 @@ enum Prompt {
         - Lead with the action. No preamble, no recap of the state, no closing summary.
         - At a blind select, the whole answer is one step and one bullet, unless the Boss Blind's rule or a skip tag \
         changes the plan.
-        - Keep a running plan for the run (the hand type to build, the jokers to look for) and say when it changes.
+        - Keep a running plan for the run (the hand type to build, the jokers to look for). Mention it only when it changes.
         - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
@@ -156,10 +156,10 @@ enum Prompt {
         var lines = ["Shop (reroll $\(shop.rerollCost)):"]
         for item in shop.cards + shop.vouchers + shop.boosters {
             let description: String = switch item.card {
-            case .joker(let j): "Joker: " + joker(j, text)
+            case .joker(let j): joker(j, text, kind: "joker", sellValue: false)
             case .consumable(let c): describe(c.key, edition: c.edition, text)
-            case .playingCard(let p): "Playing card: " + card(.faceUp(p))
-            case .voucher(let key): "Voucher: " + describe(key, edition: nil, text)
+            case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
+            case .voucher(let key): describe(key, edition: nil, text, kind: "voucher")
             case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
             }
             lines.append("- $\(item.cost) \(description)")
@@ -172,23 +172,29 @@ enum Prompt {
         return s.jokers.isEmpty ? [header + " none"] : [header] + s.jokers.map { "- " + joker($0, text) }
     }
 
-    private static func joker(_ j: Joker, _ text: GameText) -> String {
-        var tags: [String] = []
+    private static func joker(_ j: Joker, _ text: GameText, kind: String? = nil, sellValue: Bool = true) -> String {
+        var tags: [String] = kind.map { [$0] } ?? []
         if let e = j.edition { tags.append(e.rawValue.capitalized) }
         tags += j.stickers.map(\.rawValue.capitalized).sorted()
         if j.debuffed { tags.append("debuffed") }
         var line = name(j.key, text) + (tags.isEmpty ? "" : " (\(tags.joined(separator: ", ")))")
-        if let template = text[j.key]?.text, !template.isEmpty { line += ": " + template.joined(separator: " ") }
+        line += template(j.key, text)
         if !j.liveValues.isEmpty {
             line += " [" + j.liveValues.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", ") + "]"
         }
-        return line + " Sells for $\(j.sellValue)."
+        return sellValue ? line + " Sells for $\(j.sellValue)." : line
     }
 
-    private static func describe(_ key: CenterKey, edition: Edition?, _ text: GameText) -> String {
-        var line = name(key, text) + (edition.map { " (\($0.rawValue.capitalized))" } ?? "")
-        if let template = text[key]?.text, !template.isEmpty { line += ": " + template.joined(separator: " ") }
-        return line
+    private static func describe(_ key: CenterKey, edition: Edition?, _ text: GameText, kind: String? = nil) -> String {
+        let tags = [kind, edition?.rawValue.capitalized].compactMap { $0 }
+        return name(key, text) + (tags.isEmpty ? "" : " (\(tags.joined(separator: ", ")))") + template(key, text)
+    }
+
+    /// ": text." with the template's lines joined, or "" when the game text isn't loaded.
+    private static func template(_ key: CenterKey, _ text: GameText) -> String {
+        guard let lines = text[key]?.text, !lines.isEmpty else { return "" }
+        let joined = lines.joined(separator: " ")
+        return ": " + joined + (joined.last.map { ".!?)".contains($0) } == true ? "" : ".")
     }
 
     private static func pokerHand(_ h: PokerHandLevel) -> String {
