@@ -31,19 +31,15 @@ public struct Advice: Sendable, Equatable {
             public init(chips: String, mult: String, total: String) { (self.chips, self.mult, self.total) = (chips, mult, total) }
         }
 
-        public struct Outcome: Sendable, Equatable {
-            public var text: String
-            public var clearsBlind: Bool
-
-            public init(text: String, clearsBlind: Bool) { (self.text, self.clearsBlind) = (text, clearsBlind) }
+        public enum Outcome: Sendable, Equatable {
+            case clears
+            case leaves(String)
         }
 
         /// What this hand does to the blind, given the score still needed. nil when the total isn't a number.
         public func outcome(chipsNeeded: Double) -> Outcome? {
             guard let total = sum.flatMap({ Double($0.total.replacing(",", with: "")) }) else { return nil }
-            return total >= chipsNeeded
-                ? Outcome(text: "Clears the blind", clearsBlind: true)
-                : Outcome(text: "Leaves \(Prompt.chips(chipsNeeded - total)) to score", clearsBlind: false)
+            return total >= chipsNeeded ? .clears : .leaves(Prompt.chips(chipsNeeded - total))
         }
 
         public init(label: String, sum: Sum? = nil, isAlternative: Bool = false) {
@@ -54,7 +50,7 @@ public struct Advice: Sendable, Equatable {
             var text = line.replacing("**", with: "")
             let isAlternative = text.lowercased().hasPrefix("instead")
             if isAlternative { text = "Instead: " + text.dropFirst("instead".count).drop { ",: ".contains($0) } }
-            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+)\s*[x×]\s*([\d,.]+)\s*=\s*([\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
+            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+)\s*[x×]\s*([\d,.]+)\s*(?:=|≈|~=|~)\s*([\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
                 self.init(label: text, isAlternative: isAlternative)
                 return
             }

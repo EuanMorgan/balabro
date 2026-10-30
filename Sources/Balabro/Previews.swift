@@ -11,10 +11,10 @@ enum Previews {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let states: [(String, CoachView, Bool, CGFloat, Updater.Status)] = [
             ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
-            ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind · hand 1", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
-            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
-            ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
-            ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
+            ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
+            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
+            ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
+            ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]
         for (name, view, showWhy, height, update) in states {
             let url = directory.appending(path: "overlay-\(name).png")

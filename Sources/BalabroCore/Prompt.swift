@@ -23,9 +23,8 @@ enum Prompt {
         - Two Pair: 46 x 2 = 92
         - Instead, Full House: 76 x 4 = 304
 
-        **Goal:** At most eight words. If the steps play a hand now, name it, such as "Playing a Diamond Flush to clear \
-        the blind". Otherwise say what this is building towards, such as "Going for a Straight" or "Saving up for a \
-        second joker".
+        **Goal:** At most eight words on what this is building towards, such as "Going for a Straight" or "Saving up for \
+        a second joker". Leave the Goal out when the steps play a hand now, because the Score block already names it.
 
         **Why:**
         - At most four bullets, one line each, no nested bullets.
@@ -37,6 +36,7 @@ enum Prompt {
         starting at 1, and never repeat one you already gave.
 
         Rules:
+        - Steps say only what to do. Reasons go in Why, so "Play 7♦ 6♠ 6♣ 4♦." and not "Play 7♦ 6♠ 6♣ 4♦ so the pair scores".
         - At every play or discard decision, check the order of the player's jokers. Jokers score from left to right, \
         so +Mult should come before XMult, Blueprint copies the joker to its right and Brainstorm copies the leftmost. \
         Effects that say "when scored" fire with the cards, before any joker's own effect, so their position doesn't \
@@ -52,7 +52,8 @@ enum Prompt {
         for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
         one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
         kind of hand, so they can compare the two. Write each line as "hand: chips x mult = total", with chips and mult \
-        after every card and joker that scores. Leave the block out in the shop, in a pack and at a blind select.
+        after every card and joker that scores, always with "=" even when the numbers are rounded. Name the hand exactly, \
+        such as "Diamond Flush" or "Pair of 9s". Leave the block out in the shop, in a pack and at a blind select.
         - End the steps at the first discard, play, reroll or pack opening, because that changes the board and you get the new state \
         straight away. Your next answer replaces these steps, so anything after that point would vanish. Put what \
         comes after in the Goal instead. Dragging jokers and buying cards don't change the board, so they can come \
@@ -184,10 +185,10 @@ enum Prompt {
         If the answer depends on cards the state doesn't list, such as a booster pack's contents, ask the player to list them.
         """
 
-    /// "Ante 3 · Big Blind · 3 hands, 2 discards". The overlay's headline and the transcript title.
+    /// "Ante 3 · Big Blind". The overlay's headline and the transcript title.
     static func title(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
         let detail = switch kind {
-        case .playHand: "\(s.blind.map { name($0.key, text) } ?? "Blind") · \(s.handsLeft) hands, \(s.discardsLeft) discards"
+        case .playHand: s.blind.map { name($0.key, text) } ?? "Blind"
         case .shop: "Shop"
         case .blindSelect: "Blind select"
         case .openPack(let pack, _): packName(pack)

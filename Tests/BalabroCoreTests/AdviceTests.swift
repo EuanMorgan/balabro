@@ -79,6 +79,14 @@ struct AdviceTests {
         #expect(a.why == ["It beats the blind."])
     }
 
+    @Test func roundedScoreLineStillGetsItsNumbers() {
+        let a = Advice(markdown: "**Score:**\n- Pair of 6s: 230 x 1,291 ≈ 296,900\n- Instead, Pair of 4s: 226 x 1,291 ~ 291,800")
+        #expect(a.score == [
+            .init(label: "Pair of 6s", sum: .init(chips: "230", mult: "1,291", total: "296,900")),
+            .init(label: "Instead: Pair of 4s", sum: .init(chips: "226", mult: "1,291", total: "291,800"), isAlternative: true),
+        ])
+    }
+
     @Test func scoreLineWhoseHandNameStartsWithANumberKeepsIt() {
         let a = Advice(markdown: "**Score:**\n- 3 of a Kind: 30 x 3 = 90")
         #expect(a.score == [.init(label: "3 of a Kind", sum: .init(chips: "30", mult: "3", total: "90"))])
@@ -122,10 +130,10 @@ struct AdviceTests {
 
     @Test func scoreLineSaysWhatTheHandDoesToTheBlind() {
         func line(_ total: String) -> Advice.ScoreLine { .init(label: "Flush", sum: .init(chips: "1", mult: "1", total: total)) }
-        #expect(line("2,412").outcome(chipsNeeded: 2000) == .init(text: "Clears the blind", clearsBlind: true))
-        #expect(line("2,000").outcome(chipsNeeded: 2000) == .init(text: "Clears the blind", clearsBlind: true))
-        #expect(line("1,914").outcome(chipsNeeded: 2000) == .init(text: "Leaves 86 to score", clearsBlind: false))
-        #expect(line("1,000").outcome(chipsNeeded: 3500) == .init(text: "Leaves 2,500 to score", clearsBlind: false))
+        #expect(line("2,412").outcome(chipsNeeded: 2000) == .clears)
+        #expect(line("2,000").outcome(chipsNeeded: 2000) == .clears)
+        #expect(line("1,914").outcome(chipsNeeded: 2000) == .leaves("86"))
+        #expect(line("1,000").outcome(chipsNeeded: 3500) == .leaves("2,500"))
         #expect(line("lots").outcome(chipsNeeded: 2000) == nil)
         #expect(Advice.ScoreLine(label: "Pair: about 60").outcome(chipsNeeded: 2000) == nil)
     }

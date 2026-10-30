@@ -391,7 +391,7 @@ public struct RunRecord: Sendable, Hashable, Codable {
 }
 
 public struct Exchange: Sendable, Hashable, Codable {
-    public var title: String     // "Ante 3 · Big Blind · hand 2", or the player's question
+    public var title: String     // "Ante 3 · Big Blind", or the player's question
     public var advice: String    // Claude's markdown, verbatim
     public var isQuestion = false
     public var sawScreen = false

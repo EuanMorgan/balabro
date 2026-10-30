@@ -200,7 +200,7 @@ struct CoachTests {
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .text("**Do this now:**\n1. Discard 7♠")))
         #expect(state.view.status == .answering)
-        #expect(state.view.headline == "Ante 1 · bl_small · 4 hands, 4 discards")
+        #expect(state.view.headline == "Ante 1 · bl_small")
         #expect(state.view.advice?.doNow == ["Discard 7♠"])
     }
 
@@ -223,7 +223,7 @@ struct CoachTests {
         _ = coach.reduce(&state, .ask("and the King?", withScreenshot: false))
         _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Keep it.", SessionID(rawValue: "S2"))))
 
-        #expect(state.view.headline == "Ante 1 · bl_small · 4 hands, 4 discards")
+        #expect(state.view.headline == "Ante 1 · bl_small")
         #expect(state.view.advice?.doNow == ["Discard 7♠."])
         #expect(state.view.advice?.why == ["It pairs with nothing."])
         #expect(state.view.thread == [

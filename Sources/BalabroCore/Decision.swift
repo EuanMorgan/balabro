@@ -18,7 +18,7 @@ public struct Decision: Sendable, Hashable {
 
     public let kind: Kind
     public let snapshot: RunSnapshot
-    /// "Ante 3 · Big Blind · 3 hands, 2 discards". The overlay's headline and the transcript title.
+    /// "Ante 3 · Big Blind". The overlay's headline and the transcript title.
     public let title: String
     /// The rendered prompt text. Its hash is the fingerprint, so "same decision" means exactly
     /// "the coach would be told the same thing". There's no second list of "decision-relevant fields" to keep in sync.

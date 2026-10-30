@@ -5,12 +5,12 @@ import SwiftUI
 ///
 /// ```
 /// ┌───────────────────────────────┐
-/// │ Ante 3 · Big Blind · hand 2 ↻●│  headline in the pixel font, refresh, status dot
-/// │ Do this now    From your save │  chip-blue label, and what the coach could see
+/// │ Ante 3 · Big Blind          ↻●│  headline in the pixel font, refresh, status dot
+/// │ Do this now  Saw your screen  │  chip-blue label, and whether the coach looked at the screen
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
 /// │ 2 Play Q-Q-6-6                │
-/// │ Two Pair        [46] × [2] = 92 │  chip blue and mult red, as in the game
-/// │             Leaves 208 to score │  against what the save says is still needed
+/// │ Two Pair      [46] × [2] = 92 │  chip blue and mult red, as in the game
+/// │           Leaves 208 to score │  or a gold total and a tick if it clears, from what the save says is left
 /// │                               │  everything above stays put; everything below scrolls
 /// │ Why ▸ Going for a Straight    │  the goal stays visible, the reasons open with one tap
 /// │ Lesson 12                     │  mult-red label
@@ -284,9 +284,11 @@ private struct DoThisNow: View {
                     .font(Theme.pixelFont(2))
                     .foregroundStyle(Theme.chips)
                 Spacer(minLength: 0)
-                Label(sawScreen ? "Saw your screen" : "From your save", systemImage: sawScreen ? "camera.fill" : "doc.text")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.muted)
+                if sawScreen {
+                    Label("Saw your screen", systemImage: "camera.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
             }
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 StepRow(number: index + 1, text: step)
@@ -373,30 +375,53 @@ private struct ScoreRow: View {
     let line: Advice.ScoreLine
     let chipsNeeded: Double?
 
+    private var outcome: Advice.ScoreLine.Outcome? { chipsNeeded.flatMap(line.outcome) }
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            HStack(spacing: 6) {
-                SuitText(line.label, size: 13, weight: .medium)
-                    .foregroundStyle(Theme.muted)
-                Spacer(minLength: 0)
-                if let sum = line.sum {
-                    HStack(spacing: 4) {
-                        tile(sum.chips, ChipTile())
-                        symbol("×")
-                        tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
-                        symbol("=")
-                        Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(Theme.text)
-                    }
-                    .fixedSize()
+            // Beside the numbers when it fits on one line, otherwise above them, so a long label never wraps letter by letter.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    label.fixedSize()
+                    Spacer(minLength: 0)
+                    numbers
+                }
+                VStack(alignment: .trailing, spacing: 4) {
+                    label.frame(maxWidth: .infinity, alignment: .leading)
+                    numbers
                 }
             }
-            if let outcome = chipsNeeded.flatMap(line.outcome) {
-                Text(outcome.text)
+            if !line.isAlternative, case .leaves(let chips) = outcome {
+                Text("Leaves \(chips) to score")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(outcome.clearsBlind ? Theme.money : Theme.muted)
+                    .foregroundStyle(Theme.muted)
             }
         }
         .opacity(line.isAlternative ? 0.6 : 1)
+    }
+
+    private var label: some View {
+        SuitText(line.label, size: 13, weight: .medium)
+            .foregroundStyle(Theme.muted)
+    }
+
+    @ViewBuilder private var numbers: some View {
+        if let sum = line.sum {
+            HStack(spacing: 4) {
+                tile(sum.chips, ChipTile())
+                symbol("×")
+                tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
+                symbol("=")
+                Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(outcome == .clears ? Theme.money : Theme.text)
+                if outcome == .clears {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .heavy))
+                        .foregroundStyle(Theme.money)
+                        .accessibilityLabel("Clears the blind")
+                }
+            }
+            .fixedSize()
+        }
     }
 
     private func tile(_ number: String, _ background: ChipTile) -> some View {

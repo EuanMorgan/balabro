@@ -51,7 +51,7 @@ struct DecisionTests {
     }
 
     @Test func handTitle() throws {
-        #expect(try decision("03-hand-after-discard")?.title == "Ante 1 · bl_small · 4 hands, 3 discards")
+        #expect(try decision("03-hand-after-discard")?.title == "Ante 1 · bl_small")
     }
 
     func blindSelect(holding tags: [String]) throws -> Decision? {
