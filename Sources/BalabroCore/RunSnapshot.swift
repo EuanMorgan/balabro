@@ -54,9 +54,19 @@ public enum Phase: Sendable, Hashable, Codable {
 
     /// `globals.lua:284`.
     init(state: Int) {
-        // TODO: 1 -> selectingHand, 5 -> shop, 7 -> blindSelect, 8 -> roundEval, 4 -> gameOver,
-        //       9 tarot, 10 planet, 15 spectral, 17 standard, 18 buffoon -> pack(kind), else other(state).
-        fatalError("not implemented")
+        self = switch state {
+        case 1: .selectingHand
+        case 4: .gameOver
+        case 5: .shop
+        case 7: .blindSelect
+        case 8: .roundEval
+        case 9: .pack(.arcana)
+        case 10: .pack(.celestial)
+        case 15: .pack(.spectral)
+        case 17: .pack(.standard)
+        case 18: .pack(.buffoon)
+        default: .other(state)
+        }
     }
 }
 

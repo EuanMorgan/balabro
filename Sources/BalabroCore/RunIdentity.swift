@@ -26,10 +26,10 @@ public struct ProgressClock: Sendable, Hashable, Codable, Comparable {
     public var purchases: Int           // GAME.round_scores.cards_purchased.amt
 
     /// Componentwise, not lexicographic: "earlier" means some counter went backwards.
+    /// Not a total order, which is fine, because the only question asked is "did it go backwards?".
     public static func < (a: Self, b: Self) -> Bool {
-        // TODO: a.round < b.round || a.handsPlayed < b.handsPlayed || ... (any counter lower).
-        //       Not a total order, which is fine; we only ever ask "did it go backwards?".
-        fatalError("not implemented")
+        a.round < b.round || a.handsPlayed < b.handsPlayed || a.cardsDiscarded < b.cardsDiscarded
+            || a.rerolls < b.rerolls || a.purchases < b.purchases
     }
 }
 
