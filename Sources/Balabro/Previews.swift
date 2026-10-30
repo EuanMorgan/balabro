@@ -55,8 +55,8 @@ enum Previews {
             "Play the Full House if it lands, otherwise play K-K-3-3.",
         ],
         score: [
-            .init(label: "Two Pair", sum: .init(chips: "46", mult: "2", total: "92")),
             .init(label: "Full House, if you draw it", sum: .init(chips: "79", mult: "4", total: "316")),
+            .init(label: "Instead: Two Pair", sum: .init(chips: "46", mult: "2", total: "92"), isAlternative: true),
         ],
         goal: "Going for a Full House",
         why: [

@@ -21,6 +21,8 @@ public struct Advice: Sendable, Equatable {
     public struct ScoreLine: Sendable, Equatable {
         public var label: String
         public var sum: Sum?
+        /// The hand the player might have chosen, shown for comparison.
+        public var isAlternative: Bool
 
         public struct Sum: Sendable, Equatable {
             public var chips: String
@@ -29,15 +31,19 @@ public struct Advice: Sendable, Equatable {
             public init(chips: String, mult: String, total: String) { (self.chips, self.mult, self.total) = (chips, mult, total) }
         }
 
-        public init(label: String, sum: Sum? = nil) { (self.label, self.sum) = (label, sum) }
+        public init(label: String, sum: Sum? = nil, isAlternative: Bool = false) {
+            (self.label, self.sum, self.isAlternative) = (label, sum, isAlternative)
+        }
 
         init(line: String) {
-            let text = line.replacing("**", with: "")
+            var text = line.replacing("**", with: "")
+            let isAlternative = text.lowercased().hasPrefix("instead")
+            if isAlternative { text = "Instead: " + text.dropFirst("instead".count).drop { ",: ".contains($0) } }
             guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+)\s*[x×]\s*([\d,.]+)\s*=\s*([\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
-                self.init(label: text)
+                self.init(label: text, isAlternative: isAlternative)
                 return
             }
-            self.init(label: String(match.1), sum: Sum(chips: String(match.2), mult: String(match.3), total: String(match.4)))
+            self.init(label: String(match.1), sum: Sum(chips: String(match.2), mult: String(match.3), total: String(match.4)), isAlternative: isAlternative)
         }
     }
 

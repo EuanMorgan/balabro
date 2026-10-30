@@ -394,6 +394,7 @@ private struct ScoreRow: View {
                 .fixedSize()
             }
         }
+        .opacity(line.isAlternative ? 0.6 : 1)
     }
 
     private func tile(_ number: String, _ background: ChipTile) -> some View {

@@ -17,7 +17,7 @@ enum Prompt {
 
         **Score:**
         - Two Pair: 46 x 2 = 92
-        - Full House, if you draw it: 76 x 4 = 304
+        - Instead, Full House: 76 x 4 = 304
 
         **Goal:** At most eight words. If the steps play a hand now, name it, such as "Playing a Diamond Flush to clear \
         the blind". Otherwise say what this is building towards, such as "Going for a Straight" or "Saving up for a \
@@ -45,9 +45,10 @@ enum Prompt {
         Photograph or Hanging Chad, say the order in the step.
         - If the player holds a consumable that helps this decision, say when to use it in the steps.
         - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
-        for the best hand available now and one for the hand you're aiming for, at most two, always as \
-        "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
-        in the shop, in a pack and at a blind select.
+        for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
+        one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
+        kind of hand, so they can compare the two. Write each line as "hand: chips x mult = total", with chips and mult \
+        after every card and joker that scores. Leave the block out in the shop, in a pack and at a blind select.
         - End the steps at the first discard, play, reroll or pack opening, because that changes the board and you get the new state \
         straight away. Your next answer replaces these steps, so anything after that point would vanish. Put what \
         comes after in the Goal instead. Dragging jokers and buying cards don't change the board, so they can come \

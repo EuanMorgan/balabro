@@ -111,4 +111,12 @@ struct AdviceTests {
     @Test func answerWithoutAGoalHasNone() {
         #expect(Advice(markdown: "**Do this now:**\n1. Discard 7♠.").goal == nil)
     }
+
+    @Test func insteadLineIsMarkedAsTheAlternative() {
+        let a = Advice(markdown: "**Score:**\n- Pair of 9s: 58 x 33 = 1,914\n- Instead, Full House: 78 x 4 = 312")
+        #expect(a.score == [
+            .init(label: "Pair of 9s", sum: .init(chips: "58", mult: "33", total: "1,914")),
+            .init(label: "Instead: Full House", sum: .init(chips: "78", mult: "4", total: "312"), isAlternative: true),
+        ])
+    }
 }
