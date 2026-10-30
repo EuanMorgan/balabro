@@ -10,7 +10,8 @@ import SwiftUI
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
 /// │ 2 Play Q-Q-6-6                │
 /// │ Why  ▸                        │  collapsed by default, one tap to open
-/// │ Lesson 12  Straights in the…  │  mult-red label, one line
+/// │ Lesson 12                     │  mult-red label
+/// │ Straights in the middle cards │  title, then the lesson in full
 /// │ [ Ask about this…        ] ⌃⌥␣│  the follow-up box
 /// └───────────────────────────────┘
 /// ```
@@ -143,16 +144,14 @@ struct AdviceView: View {
             }
             if let lesson = advice.lesson {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(lesson.number.map { "Lesson \($0)" } ?? "Lesson")
-                            .font(Theme.pixelFont(2))
-                            .foregroundStyle(Theme.mult)
-                        Text(lesson.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                            .lineLimit(showWhy ? nil : 1)
-                    }
-                    if showWhy, !lesson.body.isEmpty {
+                    Text(lesson.number.map { "Lesson \($0)" } ?? "Lesson")
+                        .font(Theme.pixelFont(2))
+                        .foregroundStyle(Theme.mult)
+                    Text(lesson.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !lesson.body.isEmpty {
                         SuitText(lesson.body, size: 13).foregroundStyle(Theme.muted)
                     }
                 }
