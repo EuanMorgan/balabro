@@ -36,7 +36,7 @@ public struct Coach: Sendable {
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
             record.progress = snapshot.progress
             record.summary = RunSummary(snapshot, previous: record.summary)
-            state.standing = CoachView.Standing(snapshot)
+            state.chipsNeeded = snapshot.phase == .selectingHand ? snapshot.blind.map { $0.target - snapshot.chipsScored } : nil
             if record != state.runs[key] {
                 state.runs[key] = record
                 effects.append(.save(record))
@@ -64,7 +64,7 @@ public struct Coach: Sendable {
                 effects.append(.save(record))
             }
             state.current = nil
-            state.standing = nil
+            state.chipsNeeded = nil
             return effects
 
         case .saveUnreadable(_, let error):
@@ -105,6 +105,7 @@ public struct Coach: Sendable {
                 }
                 var record = state.runs[key]!
                 record.head = session
+                record.rules = Prompt.rulesVersion
                 record.transcript.append(Exchange(title: turn.purpose.title, advice: answer, isQuestion: turn.purpose.isQuestion, sawScreen: turn.sawScreen))
                 if case .decision(let decision) = turn.purpose { record.lastCoached = decision.fingerprint }
                 state.runs[key] = record
@@ -156,11 +157,12 @@ public struct Coach: Sendable {
         case .decision(let decision): screenshotFailed || packUnseen ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
         }
+        let rules = record.head != nil && record.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
         let id = TurnID(state.takeID())
         state.activity = .running(.init(id: id, purpose: purpose, partial: "", sawScreen: screenshot != nil))
         state.retryable = nil
         state.problem = screenshotFailed ? .screenRecordingDenied : nil
-        return [.startTurn(TurnRequest(id: id, forkFrom: record.head, message: UserMessage(text: text, screenshotPNG: screenshot)))]
+        return [.startTurn(TurnRequest(id: id, forkFrom: record.head, message: UserMessage(text: rules + text, screenshotPNG: screenshot)))]
     }
 
     private func startNext(_ state: inout CoachState) -> [CoachEffect] {
@@ -181,7 +183,7 @@ public struct CoachState: Sendable {
     var queuedQuestion: String?
     var retryable: Purpose?
     var problem: Problem?
-    var standing: CoachView.Standing?
+    var chipsNeeded: Double?
     var packLooks = 0
     var nextID = 0
 
@@ -204,7 +206,7 @@ public struct CoachState: Sendable {
         let canRetry = retryable != nil && activity.isIdle
         if let decision = activity.purpose?.decision {
             return CoachView(
-                status: status, headline: decision.title, standing: standing, waitingOn: partial.isEmpty ? decision.kind : nil,
+                status: status, headline: decision.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? decision.kind : nil,
                 advice: partial.isEmpty ? nil : Advice(markdown: partial), sawScreen: sawScreen, thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
@@ -218,7 +220,7 @@ public struct CoachState: Sendable {
         return CoachView(
             status: status,
             headline: planIndex.map { history[$0].title } ?? (current == nil ? "Start or continue a run" : "Waiting for your next move"),
-            standing: standing, advice: plan, sawScreen: planIndex.map { history[$0].sawScreen } ?? false, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
+            chipsNeeded: chipsNeeded, advice: plan, sawScreen: planIndex.map { history[$0].sawScreen } ?? false, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
     }
 
     /// The decision this state last saw, so a duplicate write, or a reread after a restart, starts nothing.
@@ -348,6 +350,8 @@ public struct RunRecord: Sendable, Hashable, Codable {
     public var transcript: [Exchange]
     /// nil for runs from before stats were recorded.
     public var summary: RunSummary?
+    /// The version of `Prompt.system` this conversation has been told about.
+    public var rules: Fingerprint?
 }
 
 public struct Exchange: Sendable, Hashable, Codable {
@@ -385,8 +389,8 @@ public struct CoachView: Sendable, Equatable {
     }
     public var status: Status
     public var headline: String
-    /// Read from the newest save, so it's right even while Claude is still answering.
-    public var standing: Standing?
+    /// What's left to score in this blind, from the newest save. nil outside a hand.
+    public var chipsNeeded: Double?
     /// The decision Claude is working on, until its first words arrive.
     public var waitingOn: Decision.Kind?
     /// The current plan, parsed even while partial so "Do this now" shows as soon as it streams.
@@ -399,22 +403,9 @@ public struct CoachView: Sendable, Equatable {
     public var problem: Problem?
     public var canRetry: Bool
 
-    public init(status: Status, headline: String, standing: Standing? = nil, waitingOn: Decision.Kind? = nil, advice: Advice?, sawScreen: Bool = false, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
-        (self.status, self.headline, self.standing, self.waitingOn, self.advice, self.sawScreen, self.thread) = (status, headline, standing, waitingOn, advice, sawScreen, thread)
+    public init(status: Status, headline: String, chipsNeeded: Double? = nil, waitingOn: Decision.Kind? = nil, advice: Advice?, sawScreen: Bool = false, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        (self.status, self.headline, self.chipsNeeded, self.waitingOn, self.advice, self.sawScreen, self.thread) = (status, headline, chipsNeeded, waitingOn, advice, sawScreen, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
-    }
-
-    public struct Standing: Sendable, Equatable {
-        /// "92 / 300" during a hand, nil outside one.
-        public var score: String?
-        public var dollars: Int
-
-        public init(score: String?, dollars: Int) { (self.score, self.dollars) = (score, dollars) }
-
-        init(_ snapshot: RunSnapshot) {
-            let score = snapshot.blind.flatMap { snapshot.phase == .selectingHand ? "\(Prompt.chips(snapshot.chipsScored)) / \(Prompt.chips($0.target))" : nil }
-            self.init(score: score, dollars: snapshot.dollars)
-        }
     }
 
     public struct FollowUp: Sendable, Equatable {

@@ -282,17 +282,65 @@ struct CoachTests {
         #expect(!exchange.isQuestion)
     }
 
-    @Test func standingComesFromTheNewestSave() throws {
+    @Test func chipsNeededComesFromTheNewestSave() throws {
         var state = CoachState(restoring: [])
-        #expect(state.view.standing == nil)
+        #expect(state.view.chipsNeeded == nil)
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
-        #expect(state.view.standing == .init(score: "0 / 300", dollars: 4))
+        #expect(state.view.chipsNeeded == 300)
         _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
-        #expect(state.view.standing == .init(score: nil, dollars: 4))
+        #expect(state.view.chipsNeeded == nil)
         _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
-        #expect(state.view.standing == .init(score: "0 / 450", dollars: 86))
+        #expect(state.view.chipsNeeded == 450)
         _ = coach.reduce(&state, .saveRemoved(profile: 1))
-        #expect(state.view.standing == nil)
+        #expect(state.view.chipsNeeded == nil)
+    }
+
+    /// A run saved by a version with different rules: it has a conversation but no record of the current rules.
+    func runFromAnOlderVersion() throws -> RunRecord {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        let effects = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+        let saved = effects.compactMap { effect -> RunRecord? in if case .save(let record) = effect { record } else { nil } }
+        var record = try #require(saved.last)
+        record.rules = nil
+        return record
+    }
+
+    func sentMessages(_ effects: [CoachEffect]) -> [String] {
+        effects.compactMap { if case .startTurn(let request) = $0 { request.message.text } else { nil } }
+    }
+
+    let rulesNotice = "THE COACHING RULES HAVE CHANGED"
+
+    @Test func aRunFromAnOlderVersionIsToldTheNewRulesOnce() throws {
+        var state = CoachState(restoring: [try runFromAnOlderVersion()])
+        let first = sentMessages(coach.reduce(&state, .saveWritten(try snap("05-shop"))))
+        #expect(first.count == 1)
+        #expect(first[0].hasPrefix(rulesNotice))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Leave.", SessionID(rawValue: "S1"))))
+        let second = sentMessages(coach.reduce(&state, .saveWritten(try snap("10-hand"))))
+        #expect(second.count == 1)
+        #expect(!second[0].contains(rulesNotice))
+    }
+
+    @Test func aFailedTurnStillOwesTheNewRules() throws {
+        var state = CoachState(restoring: [try runFromAnOlderVersion()])
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .failed(.notLoggedIn)))
+        let retried = sentMessages(coach.reduce(&state, .retry))
+        #expect(retried.count == 1)
+        #expect(retried[0].hasPrefix(rulesNotice))
+    }
+
+    @Test func aNewRunIsNotToldTheRulesAgain() throws {
+        var state = CoachState(restoring: [])
+        let first = sentMessages(coach.reduce(&state, .saveWritten(try snap("02-hand"))))
+        #expect(first.count == 1)
+        #expect(!first[0].contains(rulesNotice))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+        let second = sentMessages(coach.reduce(&state, .saveWritten(try snap("05-shop"))))
+        #expect(second.count == 1)
+        #expect(!second[0].contains(rulesNotice))
     }
 
     @Test func replyWithNewStepsReplacesTheGoal() throws {

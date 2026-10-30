@@ -90,7 +90,7 @@ struct OverlayContent: View {
 
     @ViewBuilder private var pinnedSteps: some View {
         if let advice = view.advice, !advice.doNow.isEmpty {
-            DoThisNow(steps: advice.doNow, score: advice.score, sawScreen: view.sawScreen)
+            DoThisNow(steps: advice.doNow, score: advice.score, chipsNeeded: view.chipsNeeded, sawScreen: view.sawScreen)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
@@ -111,32 +111,14 @@ struct OverlayContent: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(view.headline.isEmpty ? "Balabro" : view.headline)
-                    .font(Theme.pixelFont(2))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                StatusLight(status: view.status)
-            }
-            if let standing = view.standing {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if let score = standing.score {
-                        Text("Score")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.muted)
-                        Text(score)
-                            .font(Theme.pixelFont(2))
-                            .foregroundStyle(Theme.text)
-                    }
-                    Spacer(minLength: 0)
-                    Text("$\(standing.dollars)")
-                        .font(Theme.pixelFont(2))
-                        .foregroundStyle(Theme.money)
-                }
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(view.headline.isEmpty ? "Balabro" : view.headline)
+                .font(Theme.pixelFont(2))
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            StatusLight(status: view.status)
         }
     }
 
@@ -281,6 +263,7 @@ private struct NoticeRow<Action: View>: View {
 private struct DoThisNow: View {
     let steps: [String]
     let score: [Advice.ScoreLine]
+    let chipsNeeded: Double?
     let sawScreen: Bool
 
     var body: some View {
@@ -298,7 +281,7 @@ private struct DoThisNow: View {
                 StepRow(number: index + 1, text: step)
             }
             ForEach(Array(score.enumerated()), id: \.offset) { _, line in
-                ScoreRow(line: line)
+                ScoreRow(line: line, chipsNeeded: chipsNeeded)
             }
         }
         .textSelection(.enabled)
@@ -377,21 +360,29 @@ struct QuestionField: View {
 
 private struct ScoreRow: View {
     let line: Advice.ScoreLine
+    let chipsNeeded: Double?
 
     var body: some View {
-        HStack(spacing: 6) {
-            SuitText(line.label, size: 13, weight: .medium)
-                .foregroundStyle(Theme.muted)
-            Spacer(minLength: 0)
-            if let sum = line.sum {
-                HStack(spacing: 4) {
-                    tile(sum.chips, ChipTile())
-                    symbol("×")
-                    tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
-                    symbol("=")
-                    Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(Theme.text)
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(spacing: 6) {
+                SuitText(line.label, size: 13, weight: .medium)
+                    .foregroundStyle(Theme.muted)
+                Spacer(minLength: 0)
+                if let sum = line.sum {
+                    HStack(spacing: 4) {
+                        tile(sum.chips, ChipTile())
+                        symbol("×")
+                        tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
+                        symbol("=")
+                        Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(Theme.text)
+                    }
+                    .fixedSize()
                 }
-                .fixedSize()
+            }
+            if let outcome = chipsNeeded.flatMap(line.outcome) {
+                Text(outcome.text)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(outcome.clearsBlind ? Theme.money : Theme.muted)
             }
         }
         .opacity(line.isAlternative ? 0.6 : 1)

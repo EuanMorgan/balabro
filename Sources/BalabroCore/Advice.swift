@@ -31,6 +31,21 @@ public struct Advice: Sendable, Equatable {
             public init(chips: String, mult: String, total: String) { (self.chips, self.mult, self.total) = (chips, mult, total) }
         }
 
+        public struct Outcome: Sendable, Equatable {
+            public var text: String
+            public var clearsBlind: Bool
+
+            public init(text: String, clearsBlind: Bool) { (self.text, self.clearsBlind) = (text, clearsBlind) }
+        }
+
+        /// What this hand does to the blind, given the score still needed. nil when the total isn't a number.
+        public func outcome(chipsNeeded: Double) -> Outcome? {
+            guard let total = sum.flatMap({ Double($0.total.replacing(",", with: "")) }) else { return nil }
+            return total >= chipsNeeded
+                ? Outcome(text: "Clears the blind", clearsBlind: true)
+                : Outcome(text: "Leaves \(Prompt.chips(chipsNeeded - total)) to score", clearsBlind: false)
+        }
+
         public init(label: String, sum: Sum? = nil, isAlternative: Bool = false) {
             (self.label, self.sum, self.isAlternative) = (label, sum, isAlternative)
         }

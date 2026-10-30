@@ -93,6 +93,19 @@ enum Prompt {
         complete new steps, then a **Score:** block at a play or discard decision, then a **Goal:** line and a **Why:** block. These replace the steps on screen.
         """
 
+    /// The CLI keeps a conversation's first system prompt and ignores `--system-prompt` on `--resume`,
+    /// so a run started on an older version only learns new rules from a message.
+    static let rulesChanged = """
+        THE COACHING RULES HAVE CHANGED. These replace all your earlier instructions, including the answer format. \
+        Follow them from now on, even where your earlier answers in this conversation look different:
+
+        \(system)
+
+
+        """
+
+    static let rulesVersion = Fingerprint.of(system)
+
     static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
         var lines: [String] = []
         switch kind {

@@ -119,4 +119,14 @@ struct AdviceTests {
             .init(label: "Instead: Full House", sum: .init(chips: "78", mult: "4", total: "312"), isAlternative: true),
         ])
     }
+
+    @Test func scoreLineSaysWhatTheHandDoesToTheBlind() {
+        func line(_ total: String) -> Advice.ScoreLine { .init(label: "Flush", sum: .init(chips: "1", mult: "1", total: total)) }
+        #expect(line("2,412").outcome(chipsNeeded: 2000) == .init(text: "Clears the blind", clearsBlind: true))
+        #expect(line("2,000").outcome(chipsNeeded: 2000) == .init(text: "Clears the blind", clearsBlind: true))
+        #expect(line("1,914").outcome(chipsNeeded: 2000) == .init(text: "Leaves 86 to score", clearsBlind: false))
+        #expect(line("1,000").outcome(chipsNeeded: 3500) == .init(text: "Leaves 2,500 to score", clearsBlind: false))
+        #expect(line("lots").outcome(chipsNeeded: 2000) == nil)
+        #expect(Advice.ScoreLine(label: "Pair: about 60").outcome(chipsNeeded: 2000) == nil)
+    }
 }

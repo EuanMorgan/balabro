@@ -12,7 +12,7 @@ enum Previews {
         let states: [(String, CoachView, Bool, CGFloat, Updater.Status)] = [
             ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind · hand 1", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
-            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", standing: .init(score: "0 / 450", dollars: 14), advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
+            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
             ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
             ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]

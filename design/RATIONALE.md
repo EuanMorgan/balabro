@@ -64,7 +64,9 @@ let effects = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard"
 
 **Follow-ups.** A question doesn't replace the advice. `CoachState.view` takes the newest decision's answer as the plan and shows every question since then under it, so the next decision clears them. A reply is plain text. Only a reply that changes what to do adds a `**Do this now:**` block, which replaces the plan's steps and reasons. The steps stay pinned at the top of the panel, and everything under them scrolls.
 
-**Scores.** The score so far, the target and your money come from the save, so they are exact. What a hand will score comes from Claude in a `**Score:**` block, because working it out in the app would mean reimplementing every joker. Those numbers are only as right as Claude's maths.
+**Scores.** What a hand will score comes from Claude in a `**Score:**` block, because working it out in the app would mean reimplementing every joker. Those numbers are only as right as Claude's maths. The score still needed comes from the save, so whether a hand clears the blind is only wrong when Claude's total is.
+
+**New rules in a running game.** The Claude CLI keeps a conversation's first system prompt when it resumes and ignores a new one. A run started on an older version would never learn new rules, so the first turn after the rules change sends them in the message. The run's memory is kept.
 
 **Stats.** All-time totals come from the game's `profile.jkr`, which goes back further than Balabro. The game forgets a run when it ends, so `RunRecord.summary` keeps one, updated on every save. A removed save also happens when a run is abandoned, so a summary says how far a run got and whether it won, not that it lost.
 
