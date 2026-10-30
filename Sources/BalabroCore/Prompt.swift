@@ -172,6 +172,13 @@ enum Prompt {
             """
     }
 
+    static let refresh = """
+        THE PLAYER PRESSED REFRESH because the steps on screen look wrong or out of date. Look at the attached screenshot \
+        and answer in the usual shape for what's on screen now. Where the screenshot and any state above disagree, trust \
+        the screenshot, because the save can lag behind the game. If a pack's cards aren't all whole yet, reply with exactly \
+        \(packNotReady) and nothing else.
+        """
+
     static let screenshotMissing = """
         The screenshot of the game could not be taken, so you can't see the screen. \
         If the answer depends on cards the state doesn't list, such as a booster pack's contents, ask the player to list them.

@@ -5,12 +5,12 @@ import SwiftUI
 ///
 /// ```
 /// ┌───────────────────────────────┐
-/// │ Ante 3 · Big Blind · hand 2  ●│  headline in the pixel font, status dot
-/// │ Score 92 / 300            $14 │  from the save
+/// │ Ante 3 · Big Blind · hand 2 ↻●│  headline in the pixel font, refresh, status dot
 /// │ Do this now    From your save │  chip-blue label, and what the coach could see
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
 /// │ 2 Play Q-Q-6-6                │
 /// │ Two Pair        [46] × [2] = 92 │  chip blue and mult red, as in the game
+/// │             Leaves 208 to score │  against what the save says is still needed
 /// │                               │  everything above stays put; everything below scrolls
 /// │ Why ▸ Going for a Straight    │  the goal stays visible, the reasons open with one tap
 /// │ Lesson 12                     │  mult-red label
@@ -26,7 +26,7 @@ struct OverlayView: View {
     let updater: Updater?
 
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, update: updater?.status ?? .none, install: {
+        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, update: updater?.status ?? .none, install: {
             Task { if await updater?.install() == true { NSApp.terminate(nil) } }
         }, screenAccess: ScreenAccess.isGranted)
     }
@@ -36,6 +36,7 @@ struct OverlayContent: View {
     let view: CoachView
     let ask: (_ question: String, _ withScreenshot: Bool) -> Void
     let retry: () -> Void
+    var refresh: () -> Void = {}
     var update = Updater.Status.none
     var install: () -> Void = {}
     var screenAccess = true
@@ -118,6 +119,16 @@ struct OverlayContent: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+            if view.status != .waitingForRun {
+                Button(action: refresh) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.muted)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Look at the screen again and redo the steps")
+            }
             StatusLight(status: view.status)
         }
     }

@@ -36,6 +36,7 @@ public struct Coach: Sendable {
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
             record.progress = snapshot.progress
             record.summary = RunSummary(snapshot, previous: record.summary)
+            state.latestSnapshot = snapshot
             state.chipsNeeded = snapshot.phase == .selectingHand ? snapshot.blind.map { $0.target - snapshot.chipsScored } : nil
             if record != state.runs[key] {
                 state.runs[key] = record
@@ -64,6 +65,7 @@ public struct Coach: Sendable {
                 effects.append(.save(record))
             }
             state.current = nil
+            state.latestSnapshot = nil
             state.chipsNeeded = nil
             return effects
 
@@ -96,7 +98,7 @@ public struct Coach: Sendable {
                 state.activity = .running(turn)
                 return []
             case .done(let answer, let session):
-                if turn.sawScreen, case .decision(let decision) = turn.purpose, decision.needsScreenshot, answer.contains(Prompt.packNotReady) {
+                if turn.sawScreen, turn.purpose.canLookAgain, answer.contains(Prompt.packNotReady) {
                     // The session isn't kept, so this look leaves no trace in the conversation.
                     state.packLooks += 1
                     state.activity = .idle
@@ -107,7 +109,7 @@ public struct Coach: Sendable {
                 record.head = session
                 record.rules = Prompt.rulesVersion
                 record.transcript.append(Exchange(title: turn.purpose.title, advice: answer, isQuestion: turn.purpose.isQuestion, sawScreen: turn.sawScreen))
-                if case .decision(let decision) = turn.purpose { record.lastCoached = decision.fingerprint }
+                if let decision = turn.purpose.decision { record.lastCoached = decision.fingerprint }
                 state.runs[key] = record
                 state.activity = .idle
                 return [.save(record)] + startNext(&state)
@@ -122,6 +124,16 @@ public struct Coach: Sendable {
         case .retry:
             guard case .idle = state.activity, let purpose = state.retryable else { return [] }
             return begin(purpose, &state)
+
+        // The way out when the coach has missed a move or got stuck, so it overrides whatever is running.
+        case .refresh:
+            guard state.current != nil else {
+                state.problem = .noRun
+                return []
+            }
+            let effects: [CoachEffect] = if case .running(let turn) = state.activity { [.cancelTurn(turn.id)] } else { [] }
+            let decision = state.latestSnapshot.flatMap { Decision.detect(in: $0, text: text) }
+            return effects + begin(.refresh(decision), &state)
         }
     }
 
@@ -140,6 +152,11 @@ public struct Coach: Sendable {
                 return capture(purpose, after: source == .shop ? packSettleDelay : tagPackSettleDelay, &state)
             }
         }
+        if case .refresh = purpose {
+            state.waitingDecision = nil
+            state.packLooks = 0
+            return capture(purpose, after: .zero, &state)
+        }
         return start(purpose, &state)
     }
 
@@ -156,6 +173,8 @@ public struct Coach: Sendable {
         let text = switch purpose {
         case .decision(let decision): screenshotFailed || packUnseen ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
+        case .refresh(let decision):
+            [decision?.prompt, Prompt.refresh, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
         }
         let rules = record.head != nil && record.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
         let id = TurnID(state.takeID())
@@ -184,6 +203,7 @@ public struct CoachState: Sendable {
     var retryable: Purpose?
     var problem: Problem?
     var chipsNeeded: Double?
+    var latestSnapshot: RunSnapshot?
     var packLooks = 0
     var nextID = 0
 
@@ -204,9 +224,9 @@ public struct CoachState: Sendable {
             (status, partial, sawScreen) = (text.isEmpty ? .thinking : .answering, text, turn.sawScreen)
         }
         let canRetry = retryable != nil && activity.isIdle
-        if let decision = activity.purpose?.decision {
+        if let purpose = activity.purpose, !purpose.isQuestion {
             return CoachView(
-                status: status, headline: decision.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? decision.kind : nil,
+                status: status, headline: purpose.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? purpose.decision?.kind : nil,
                 advice: partial.isEmpty ? nil : Advice(markdown: partial), sawScreen: sawScreen, thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
@@ -271,14 +291,29 @@ public struct CoachState: Sendable {
     enum Purpose: Sendable, Hashable {
         case decision(Decision)
         case question(String)
+        /// nil when the newest save isn't a decision the app recognises, so only the screenshot can say what's going on.
+        case refresh(Decision?)
 
-        var decision: Decision? { if case .decision(let d) = self { d } else { nil } }
-        var isQuestion: Bool { decision == nil }
+        var decision: Decision? {
+            switch self {
+            case .decision(let d), .refresh(let d?): d
+            case .question, .refresh(nil): nil
+            }
+        }
+        var isQuestion: Bool { if case .question = self { true } else { false } }
+        var canLookAgain: Bool {
+            switch self {
+            case .decision(let d): d.needsScreenshot
+            case .refresh: true
+            case .question: false
+            }
+        }
 
         var title: String {
             switch self {
-            case .decision(let d): d.title
+            case .decision(let d), .refresh(let d?): d.title
             case .question(let q): q
+            case .refresh(nil): "What's on your screen"
             }
         }
     }
@@ -299,6 +334,7 @@ public enum CoachEvent: Sendable {
     case ask(String, withScreenshot: Bool)
     case turnOutput(TurnID, TurnOutput)
     case retry
+    case refresh
 }
 
 public enum CoachEffect: Sendable, Hashable {

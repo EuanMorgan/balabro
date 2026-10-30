@@ -31,6 +31,7 @@ final class CoachRuntime {
 
     func ask(_ question: String, withScreenshot: Bool) { send(.ask(question, withScreenshot: withScreenshot)) }
     func retry() { send(.retry) }
+    func refresh() { send(.refresh) }
 
     private func send(_ event: CoachEvent) {
         let effects = coach.reduce(&state, event)

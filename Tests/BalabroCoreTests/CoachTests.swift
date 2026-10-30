@@ -292,6 +292,70 @@ struct CoachTests {
         #expect(actions(coach.reduce(&state, .saveWritten(try SaveFile.decode(second, profile: 1)))) == [.captureGameWindow(CaptureID(2), after: coach.tagPackSettleDelay)])
     }
 
+    @Test func refreshLooksAtTheScreenAndReplacesTheSteps() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+
+        #expect(actions(coach.reduce(&state, .refresh)) == [.captureGameWindow(CaptureID(1), after: .zero)])
+        let message = try #require(sentRequests(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([1])))).first).message
+        #expect(message.screenshotPNG == Data([1]))
+        #expect(message.text.hasPrefix("DECISION: play or discard"))
+        #expect(message.text.contains("THE PLAYER PRESSED REFRESH"))
+
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("**Do this now:**\n1. Discard.", SessionID(rawValue: "S1"))))
+        #expect(state.view.advice?.doNow == ["Discard."])
+        #expect(state.view.sawScreen)
+        #expect(actions(coach.reduce(&state, .saveWritten(try snap("02-hand")))).isEmpty)
+    }
+
+    @Test func refreshStopsATurnThatIsStillRunning() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        #expect(actions(coach.reduce(&state, .refresh)) == [.cancelTurn(TurnID(0)), .captureGameWindow(CaptureID(1), after: .zero)])
+        #expect(actions(coach.reduce(&state, .turnOutput(TurnID(0), .done("Too late.", SessionID(rawValue: "S0"))))).isEmpty)
+    }
+
+    @Test func refreshWorksWhenTheSaveIsNotADecision() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("04-round-eval")))
+        #expect(actions(coach.reduce(&state, .refresh)) == [.captureGameWindow(CaptureID(0), after: .zero)])
+        #expect(state.view.headline == "What's on your screen")
+        let message = try #require(sentRequests(coach.reduce(&state, .screenshot(CaptureID(0), png: Data([1])))).first).message
+        #expect(message.text.hasPrefix("THE PLAYER PRESSED REFRESH"))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("**Do this now:**\n1. Cash out.", SessionID(rawValue: "S0"))))
+        #expect(state.view.advice?.doNow == ["Cash out."])
+    }
+
+    @Test func refreshLooksAgainIfAPackIsStillOpening() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("04-round-eval")))
+        _ = coach.reduce(&state, .refresh)
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: Data([1])))
+        #expect(actions(coach.reduce(&state, .turnOutput(TurnID(1), .done("PACK_NOT_READY", SessionID(rawValue: "S0"))))) == [.captureGameWindow(CaptureID(2), after: coach.packRetryDelay)])
+        #expect(state.view.advice == nil)
+    }
+
+    @Test func aFailedRefreshRetriesWithANewScreenshot() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("04-round-eval")))
+        _ = coach.reduce(&state, .refresh)
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: Data([1])))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .failed(.notLoggedIn)))
+        #expect(actions(coach.reduce(&state, .retry)) == [.captureGameWindow(CaptureID(2), after: .zero)])
+    }
+
+    @Test func refreshWithoutARunSaysSo() {
+        var state = CoachState(restoring: [])
+        #expect(coach.reduce(&state, .refresh).isEmpty)
+        #expect(state.view.problem == .noRun)
+    }
+
+    func sentRequests(_ effects: [CoachEffect]) -> [TurnRequest] {
+        effects.compactMap { if case .startTurn(let request) = $0 { request } else { nil } }
+    }
+
     @Test func chipsNeededComesFromTheNewestSave() throws {
         var state = CoachState(restoring: [])
         #expect(state.view.chipsNeeded == nil)

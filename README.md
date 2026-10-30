@@ -30,6 +30,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 3. Start or continue a run in Balatro. Advice appears a few seconds after each decision.
 4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. The reply appears under the steps, and the steps change if the answer changes what to do. Your questions clear at the next decision. Press **Escape** to go back to the game.
 5. To let the coach see the cards in a booster pack, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach asks you to list the cards instead. Above the steps, the panel says whether the coach used your screen or only your save.
+6. If the steps ever look wrong or out of date, click the **refresh arrow** at the top of the panel. The coach looks at the screen again and gives new steps.
 
 To see how you play over time, click the Balabro icon in the menu bar and choose **Your stats**. All-time totals come from the game's own profile. Run-by-run history starts when you first play with this version.
 
