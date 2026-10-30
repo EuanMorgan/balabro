@@ -131,7 +131,9 @@ enum Prompt {
     static func onlyBossLeft(_ s: RunSnapshot, _ text: GameText) -> String? {
         let canChange = ["v_directors_cut", "v_retcon"].contains { s.vouchers.contains(CenterKey(rawValue: $0)) }
             || s.jokers.contains { $0.key.rawValue == "j_luchador" }
-        guard s.blindSelect.boss == .select, !canChange else { return nil }
+        // Not `boss == .select`: the game saves first and only then marks the next blind as selectable.
+        let done: [BlindSelect.State] = [.defeated, .skipped]
+        guard done.contains(s.blindSelect.small), done.contains(s.blindSelect.big), !done.contains(s.blindSelect.boss), !canChange else { return nil }
         let rule = text[s.blindSelect.bossKey]?.text.joined(separator: " ") ?? ""
         return """
             **Do this now:**

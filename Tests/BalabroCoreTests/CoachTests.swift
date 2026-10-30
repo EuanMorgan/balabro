@@ -409,7 +409,8 @@ struct CoachTests {
 
     func bossSelect() throws -> RunSnapshot {
         var snapshot = try snap("09-blind-select")
-        (snapshot.blindSelect.small, snapshot.blindSelect.big, snapshot.blindSelect.boss) = (.defeated, .defeated, .select)
+        (snapshot.blindSelect.small, snapshot.blindSelect.big) = (.defeated, .defeated)
+        #expect(snapshot.blindSelect.boss == .upcoming)
         return snapshot
     }
 
@@ -460,6 +461,13 @@ struct CoachTests {
         var snapshot = try bossSelect()
         snapshot.jokers[0].key = CenterKey(rawValue: "j_luchador")
         #expect(starts(coach.reduce(&state, .saveWritten(snapshot))).count == 1)
+    }
+
+    @Test func skippingTheBigBlindStillLeavesOnlyTheBoss() throws {
+        var state = CoachState(restoring: [])
+        var snapshot = try bossSelect()
+        snapshot.blindSelect.big = .skipped
+        #expect(starts(coach.reduce(&state, .saveWritten(snapshot))).isEmpty)
     }
 
     @Test func theBigBlindIsStillADecision() throws {
