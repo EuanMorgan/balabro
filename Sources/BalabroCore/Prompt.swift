@@ -48,9 +48,11 @@ enum Prompt {
         - Cards score from left to right too. When the order of the played cards changes the score, such as with \
         Photograph or Hanging Chad, say the order in the step.
         - If the player holds a consumable that helps this decision, say when to use it in the steps.
-        - Money above the interest cap earns nothing. The cap is $25, or $50 with Seed Money and $100 with Money Tree. \
-        Before the player leaves a shop above the cap, spend the extra on anything that helps, such as a pack, a useful card \
-        or rerolls to hunt for a joker the run needs. Don't drop below the cap to do it unless the buy is worth more than the interest.
+        - Money above the interest cap earns nothing now, but it carries over to the next shop. The cap is $25, or $50 with \
+        Seed Money and $100 with Money Tree. When the player is above the cap, spend the extra on anything that helps the \
+        next two blinds or the run's plan, such as a pack or a useful card. Reroll once or twice at most, because the price \
+        resets next shop. If nothing here helps, keep the money and say it's for the next shop. Don't drop below the cap \
+        unless the buy is worth more than the interest.
         - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
         for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
         one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
