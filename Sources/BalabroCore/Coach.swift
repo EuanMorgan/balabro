@@ -20,48 +20,130 @@ public struct Coach: Sendable {
     public init(text: GameText) { self.text = text }
 
     public func reduce(_ state: inout CoachState, _ event: CoachEvent) -> [CoachEffect] {
-        // TODO, by event:
-        //
-        // .saveWritten(s):
-        //   key = runKey(for: s, in: state)        // see below
-        //   if key != state.current { effects += abandonActivity(); state.current = key; state.runs[key] = .new(key, s.progress) }
-        //   state.runs[key].progress = s.progress; effects += .save(record)
-        //   guard let d = Decision.detect(in: s, text: text) else { return effects }
-        //   guard d.fingerprint != (state.activity.decisionFingerprint ?? state.waitingDecision?.fingerprint
-        //                           ?? record.lastCoached) else { return effects }      // duplicate write, or a restart
-        //   switch state.activity {
-        //     case .running(t) where t.purpose is .question: state.waitingDecision = d       // never cancel the player's question
-        //     case .running(t): effects += .cancelTurn(t.id); fallthrough-ish to begin(d)
-        //     case .capturing, .idle: begin(d)                                               // a stale capture is ignored by ID
-        //   }
-        //   begin(d): d.needsScreenshot ? capture(.decision(d)) : start(.decision(d))
-        //
-        // .saveRemoved(profile): the game deletes save.jkr on game over and when a new run replaces it.
-        //   If it's the current run's profile: abandonActivity(), state.current = nil.
-        //
-        // .screenshot(id, png): ignore unless state.activity == .capturing(id, purpose).
-        //   start(purpose, png). png == nil -> state.problem = .screenRecordingDenied, start anyway with text that
-        //   tells Claude the pack contents are unknown so it asks the player to list them.
-        //
-        // .ask(q, withScreenshot): no current run -> problem = .noRun.
-        //   idle -> withScreenshot ? capture(.question(q)) : start(.question(q)).
-        //   busy -> state.queuedQuestion = [queued, q].joined("\n").
-        //
-        // .turnOutput(id, out): ignore unless state.activity == .running(t) with t.id == id.
-        //   .started(session)  -> nothing to keep; head only moves on .done.
-        //   .text(delta)       -> t.partial += delta.
-        //   .done(text, sess)  -> record.head = sess; record.transcript.append(...);
-        //                         if decision: record.lastCoached = fingerprint; effects += .save(record);
-        //                         activity = .idle; startNext(): queuedQuestion first, then waitingDecision.
-        //   .failed(f)         -> state.problem = .turnFailed(f); state.retryable = t.purpose; activity = .idle.
-        //                         No automatic retry: "not logged in" would loop.
-        //
-        // .retry: start(state.retryable) if idle.
-        //
-        // runKey(for s): latest record with s.identity; if none -> replay 0;
-        //   if s.progress < record.progress (a counter went backwards) -> replay + 1, a new run on the same seed;
-        //   else that record's key (this is also how an app restart reattaches to its run).
-        fatalError("not implemented")
+        switch event {
+        case .saveWritten(let snapshot):
+            var effects: [CoachEffect] = []
+            let key = state.runKey(for: snapshot)
+            if key != state.current {
+                effects += state.abandonActivity()
+                state.current = key
+            }
+            var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
+            record.progress = snapshot.progress
+            if record != state.runs[key] {
+                state.runs[key] = record
+                effects.append(.save(record))
+            }
+            switch state.problem {
+            case .noRun, .saveUnreadable: state.problem = nil
+            default: break
+            }
+            guard let decision = Decision.detect(in: snapshot, text: text),
+                  decision.fingerprint != state.newestFingerprint else { return effects }
+            switch state.activity {
+            case .running(let turn) where turn.purpose.isQuestion:
+                state.waitingDecision = decision
+            case .capturing(_, let purpose) where purpose.isQuestion:
+                state.waitingDecision = decision
+            case .running(let turn):
+                effects.append(.cancelTurn(turn.id))
+                effects += begin(.decision(decision), &state)
+            case .capturing, .idle:
+                effects += begin(.decision(decision), &state)
+            }
+            return effects
+
+        case .saveRemoved(let profile):
+            guard state.current?.identity.profile == profile else { return [] }
+            let effects = state.abandonActivity()
+            state.current = nil
+            return effects
+
+        case .saveUnreadable(_, let error):
+            state.problem = .saveUnreadable(error)
+            return []
+
+        case .screenshot(let id, let png):
+            guard case .capturing(id, let purpose) = state.activity else { return [] }
+            return start(purpose, screenshot: png, screenshotFailed: png == nil, &state)
+
+        case .ask(let question, let withScreenshot):
+            guard state.current != nil else {
+                state.problem = .noRun
+                return []
+            }
+            guard case .idle = state.activity else {
+                state.queuedQuestion = [state.queuedQuestion, question].compactMap { $0 }.joined(separator: "\n")
+                return []
+            }
+            return withScreenshot ? capture(.question(question), after: .zero, &state) : start(.question(question), &state)
+
+        case .turnOutput(let id, let output):
+            guard case .running(var turn) = state.activity, turn.id == id, let key = state.current else { return [] }
+            switch output {
+            case .started:
+                return []
+            case .text(let delta):
+                turn.partial += delta
+                state.activity = .running(turn)
+                return []
+            case .done(let answer, let session):
+                var record = state.runs[key]!
+                record.head = session
+                record.transcript.append(Exchange(title: turn.purpose.title, advice: answer))
+                if case .decision(let decision) = turn.purpose { record.lastCoached = decision.fingerprint }
+                state.runs[key] = record
+                state.activity = .idle
+                return [.save(record)] + startNext(&state)
+            case .failed(let failure):
+                state.problem = .turnFailed(failure)
+                state.retryable = turn.purpose
+                state.activity = .idle
+                return []
+            }
+
+        case .retry:
+            guard case .idle = state.activity, let purpose = state.retryable else { return [] }
+            return begin(purpose, &state)
+        }
+    }
+
+    private func begin(_ purpose: CoachState.Purpose, _ state: inout CoachState) -> [CoachEffect] {
+        if case .decision(let decision) = purpose {
+            state.waitingDecision = nil
+            if decision.needsScreenshot { return capture(purpose, after: packSettleDelay, &state) }
+        }
+        return start(purpose, &state)
+    }
+
+    private func capture(_ purpose: CoachState.Purpose, after delay: Duration, _ state: inout CoachState) -> [CoachEffect] {
+        let id = CaptureID(state.takeID())
+        state.activity = .capturing(id, purpose)
+        return [.captureGameWindow(id, after: delay)]
+    }
+
+    private func start(
+        _ purpose: CoachState.Purpose, screenshot: Data? = nil, screenshotFailed: Bool = false, _ state: inout CoachState
+    ) -> [CoachEffect] {
+        guard let key = state.current, let record = state.runs[key] else { return [] }
+        let text = switch purpose {
+        case .decision(let decision): screenshotFailed ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
+        case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
+        }
+        let id = TurnID(state.takeID())
+        state.activity = .running(.init(id: id, purpose: purpose, partial: ""))
+        state.retryable = nil
+        state.problem = screenshotFailed ? .screenRecordingDenied : nil
+        return [.startTurn(TurnRequest(id: id, forkFrom: record.head, message: UserMessage(text: text, screenshotPNG: screenshot)))]
+    }
+
+    private func startNext(_ state: inout CoachState) -> [CoachEffect] {
+        if let question = state.queuedQuestion {
+            state.queuedQuestion = nil
+            return start(.question(question), &state)
+        }
+        if let decision = state.waitingDecision { return begin(.decision(decision), &state) }
+        return []
     }
 }
 
@@ -81,17 +163,82 @@ public struct CoachState: Sendable {
     }
 
     /// Everything the overlay draws. Derived, never stored, so it can't drift from the state.
-    public var view: CoachView { fatalError("not implemented") }
+    public var view: CoachView {
+        let history = current.flatMap { runs[$0] }?.transcript ?? []
+        let status: CoachView.Status, headline: String, answer: String?
+        switch activity {
+        case .idle:
+            status = current == nil ? .waitingForRun : .ready
+            headline = history.last?.title ?? (current == nil ? "Start or continue a run" : "Waiting for your next move")
+            answer = history.last?.advice
+        case .capturing(_, let purpose):
+            (status, headline, answer) = (.lookingAtPack, purpose.title, nil)
+        case .running(let turn):
+            (status, headline, answer) = (turn.partial.isEmpty ? .thinking : .answering, turn.purpose.title, turn.partial.isEmpty ? nil : turn.partial)
+        }
+        return CoachView(
+            status: status, headline: headline, advice: answer.map(Advice.init(markdown:)), history: history,
+            queuedQuestion: queuedQuestion, problem: problem, canRetry: retryable != nil && activity.isIdle)
+    }
+
+    /// The decision this state last saw, so a duplicate write, or a reread after a restart, starts nothing.
+    var newestFingerprint: Fingerprint? {
+        activity.decision?.fingerprint ?? waitingDecision?.fingerprint ?? retryable?.decision?.fingerprint
+            ?? current.flatMap { runs[$0] }?.lastCoached
+    }
+
+    /// The newest run with this identity, unless a progress counter went backwards: then it's a replay of the seed.
+    /// This is also how an app restart reattaches to its run.
+    func runKey(for snapshot: RunSnapshot) -> RunKey {
+        guard let latest = runs.values.filter({ $0.key.identity == snapshot.identity }).max(by: { $0.key.replay < $1.key.replay }) else {
+            return RunKey(identity: snapshot.identity, replay: 0)
+        }
+        return snapshot.progress < latest.progress ? RunKey(identity: snapshot.identity, replay: latest.key.replay + 1) : latest.key
+    }
+
+    mutating func abandonActivity() -> [CoachEffect] {
+        let effects: [CoachEffect] = if case .running(let turn) = activity { [.cancelTurn(turn.id)] } else { [] }
+        activity = .idle
+        waitingDecision = nil
+        queuedQuestion = nil
+        retryable = nil
+        return effects
+    }
+
+    mutating func takeID() -> Int {
+        defer { nextID += 1 }
+        return nextID
+    }
 
     enum Activity: Sendable {
         case idle
         case capturing(CaptureID, Purpose)
         case running(Turn)
+
+        var isIdle: Bool { if case .idle = self { true } else { false } }
+
+        var decision: Decision? {
+            switch self {
+            case .idle: nil
+            case .capturing(_, let purpose): purpose.decision
+            case .running(let turn): turn.purpose.decision
+            }
+        }
     }
 
     enum Purpose: Sendable, Hashable {
         case decision(Decision)
         case question(String)
+
+        var decision: Decision? { if case .decision(let d) = self { d } else { nil } }
+        var isQuestion: Bool { decision == nil }
+
+        var title: String {
+            switch self {
+            case .decision(let d): d.title
+            case .question(let q): q
+            }
+        }
     }
 
     struct Turn: Sendable {
