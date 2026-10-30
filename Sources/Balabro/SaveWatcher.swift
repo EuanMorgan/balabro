@@ -81,7 +81,6 @@ struct SaveWatcher: Sendable {
     }
 }
 
-/// An FSEvents stream with file-level events, delivered on a private serial queue.
 private final class FileEvents: Sendable {
     private final class Context: Sendable {
         let onChange: @Sendable ([String]) -> Void

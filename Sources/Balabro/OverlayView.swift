@@ -205,7 +205,6 @@ struct QuestionField: View {
     }
 }
 
-/// One numbered step: the number sits on a chip-blue tile like the game's buttons, the text stays in the system font.
 private struct StepRow: View {
     let number: Int
     let text: String
@@ -224,7 +223,6 @@ private struct StepRow: View {
     }
 }
 
-/// Body text with suit glyphs in the game's colours: hearts and diamonds in mult red, spades and clubs in chip blue.
 private struct SuitText: View {
     let attributed: AttributedString
     let size: CGFloat
@@ -320,7 +318,6 @@ private struct ProblemBanner: View {
     }
 }
 
-/// The game's button shape: a rounded tile with a darker lip along the bottom edge.
 private struct ChipTile: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 5)
@@ -331,7 +328,6 @@ private struct ChipTile: View {
     }
 }
 
-/// The felt panel with the same darker lip as the game's UI boxes.
 private struct Panel: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 12)

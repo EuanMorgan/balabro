@@ -1,6 +1,5 @@
 import Foundation
 
-/// Short helper commands (`unzip`, `claude --version`, the login-shell probe), as opposed to a coaching turn.
 enum Command {
     /// Stdout goes to a temporary file, not a pipe: an interactive shell can leave background jobs
     /// (prompt themes start daemons) holding a pipe open long after the command itself exits.
