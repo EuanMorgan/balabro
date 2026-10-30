@@ -282,6 +282,16 @@ struct CoachTests {
         #expect(!exchange.isQuestion)
     }
 
+    @Test func theSecondPackFromADoubledTagIsCoachedToo() throws {
+        var state = CoachState(restoring: [])
+        let first = Fixture.save("01-blind-select", holdingTags: ["tag_meteor", "tag_meteor"])
+        #expect(actions(coach.reduce(&state, .saveWritten(try SaveFile.decode(first, profile: 1)))) == [.captureGameWindow(CaptureID(0), after: coach.tagPackSettleDelay)])
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: Data([1])))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("**Do this now:**\n1. Take Mercury.", SessionID(rawValue: "S0"))))
+        let second = Data(Fixture.saveText("01-blind-select").replacingOccurrences(of: #"["STATE"]=7"#, with: #"["STATE"]=10"#).utf8)
+        #expect(actions(coach.reduce(&state, .saveWritten(try SaveFile.decode(second, profile: 1)))) == [.captureGameWindow(CaptureID(2), after: coach.tagPackSettleDelay)])
+    }
+
     @Test func chipsNeededComesFromTheNewestSave() throws {
         var state = CoachState(restoring: [])
         #expect(state.view.chipsNeeded == nil)

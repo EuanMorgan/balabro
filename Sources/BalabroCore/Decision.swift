@@ -31,8 +31,7 @@ public struct Decision: Sendable, Hashable {
         if case .openPack = kind { true } else { false }
     }
 
-    /// Returns nil for writes that aren't decisions: round end, game over, new round, menu, unknown states,
-    /// and the pack states, which the game never saves in.
+    /// Returns nil for writes that aren't decisions: round end, game over, new round, menu and unknown states.
     ///
     /// Rules, in order:
     /// 1. `openingBooster != nil` -> `.openPack(.shop)` (the `save_with_action` write, `button_callbacks.lua:2172`).
@@ -40,7 +39,9 @@ public struct Decision: Sendable, Hashable {
     ///    Every blind-select save (`game.lua:3265`, the skip at `button_callbacks.lua:2771`, the boss reroll at `:2846`)
     ///    is followed at once by a loop over `G.GAME.tags`, oldest first, that fires the first `new_blind_choice` tag.
     ///    That includes `tag_boss`, which opens no pack, so a Boss Tag held ahead of a pack tag means no pack yet.
-    /// 3. `.selectingHand` -> `.playHand`; `.shop` -> `.shop`; `.blindSelect` -> `.blindSelect`.
+    /// 3. A pack phase -> `.openPack(.skipTag)`. When a pack closes, the next held pack tag fires, and the save
+    ///    that follows (`button_callbacks.lua:2623`) is written in the new pack's state with that tag already gone.
+    /// 4. `.selectingHand` -> `.playHand`; `.shop` -> `.shop`; `.blindSelect` -> `.blindSelect`.
     public static func detect(in snapshot: RunSnapshot, text: GameText) -> Decision? {
         guard let kind = kind(of: snapshot) else { return nil }
         let prompt = Prompt.decision(kind, snapshot, text)
@@ -59,12 +60,26 @@ public struct Decision: Sendable, Hashable {
             return .blindSelect
         case .selectingHand: return .playHand
         case .shop: return .shop
-        case .pack, .roundEval, .gameOver, .other: return nil
+        case .pack(let kind):
+            let tag = TagKey.opening(kind)
+            return tag.pack.map { .openPack($0, from: .skipTag(tag)) }
+        case .roundEval, .gameOver, .other: return nil
         }
     }
 }
 
 extension TagKey {
+    static func opening(_ kind: PackKind) -> TagKey {
+        let rawValue = switch kind {
+        case .standard: "tag_standard"
+        case .arcana: "tag_charm"
+        case .celestial: "tag_meteor"
+        case .buffoon: "tag_buffoon"
+        case .spectral: "tag_ethereal"
+        }
+        return TagKey(rawValue: rawValue)
+    }
+
     /// The fixed pack each tag opens (`tag.lua:206-290`). The Charm and Meteor Tags pick `_mega_1` or `_mega_2`
     /// at random; both have the same size, so `_1` stands in.
     var pack: BoosterPack? {

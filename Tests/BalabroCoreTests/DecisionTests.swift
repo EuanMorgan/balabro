@@ -72,6 +72,21 @@ struct DecisionTests {
         #expect(try blindSelect(holding: ["tag_boss", "tag_buffoon"])?.kind == .blindSelect)
     }
 
+    /// What the game writes when a pack closes and the next held tag opens another: the new pack's state, with its tag gone.
+    func nextTagPack(state: Int) -> Data {
+        Data(Fixture.saveText("01-blind-select").replacingOccurrences(of: #"["STATE"]=7"#, with: #"["STATE"]=\#(state)"#).utf8)
+    }
+
+    @Test func aPackOpenedByTheNextTagIsADecision() throws {
+        let d = try #require(Decision.detect(in: try SaveFile.decode(nextTagPack(state: 10), profile: 1), text: .missing))
+        guard case .openPack(let pack, from: .skipTag(let tag)) = d.kind else {
+            Issue.record("expected a pack from a tag, got \(d.kind)")
+            return
+        }
+        #expect((tag.rawValue, pack.key.rawValue, pack.cardsShown, pack.picks) == ("tag_meteor", "p_celestial_mega_1", 5, 2))
+        #expect(d.needsScreenshot)
+    }
+
     @Test func tagsThatDontFireOnABlindChoiceAreSkippedOver() throws {
         #expect(try blindSelect(holding: ["tag_handy", "tag_charm"])?.needsScreenshot == true)
     }

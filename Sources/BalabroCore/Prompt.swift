@@ -86,8 +86,9 @@ enum Prompt {
         A joker from a pack needs a free joker slot.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
         player opens it.
-        - A screenshot can be taken before a pack finishes opening. If a pack decision's screenshot doesn't show the \
-        pack's cards yet, reply with exactly \(packNotReady) and nothing else. You'll get a new screenshot.
+        - A screenshot can be taken before a pack finishes opening. If a pack decision's screenshot doesn't show every \
+        one of the pack's cards whole, because they haven't appeared or are still dissolving into view, reply with exactly \
+        \(packNotReady) and nothing else, even if you can read some of them. You'll get a new screenshot.
         - If there's no screenshot, ask the player to list the pack's cards.
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
