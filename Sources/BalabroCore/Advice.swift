@@ -7,12 +7,14 @@ import Foundation
 public struct Advice: Sendable, Equatable {
     public var doNow: [String]
     public var score: [ScoreLine]
+    /// One line on what this is building towards, shown while `why` is folded away.
+    public var goal: String?
     public var why: [String]
     public var lesson: Lesson?
     public var rest: String
 
-    public init(doNow: [String], score: [ScoreLine] = [], why: [String], lesson: Lesson?, rest: String) {
-        (self.doNow, self.score, self.why, self.lesson, self.rest) = (doNow, score, why, lesson, rest)
+    public init(doNow: [String], score: [ScoreLine] = [], goal: String? = nil, why: [String], lesson: Lesson?, rest: String) {
+        (self.doNow, self.score, self.goal, self.why, self.lesson, self.rest) = (doNow, score, goal, why, lesson, rest)
     }
 
     /// What a hand scores, such as "Two Pair: 46 x 2 = 92". A line in any other form has only a `label`.
@@ -46,11 +48,12 @@ public struct Advice: Sendable, Equatable {
         public init(number: Int?, title: String, body: String) { (self.number, self.title, self.body) = (number, title, body) }
     }
 
-    /// Splits on the `**Do this now:**`, `**Score:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
+    /// Splits on the `**Do this now:**`, `**Score:**`, `**Goal:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
     /// bold optional). Numbered and bulleted lines become items; a half-streamed last line is kept as is.
     public init(markdown: String) {
-        (doNow, score, why, lesson) = ([], [], [], nil)
+        (doNow, score, goal, why, lesson) = ([], [], nil, [], nil)
         var scoreLines: [String] = []
+        var goalLines: [String] = []
         var rest: [String] = []
         var section: Section?
         var lessonBody: [String] = []
@@ -64,16 +67,17 @@ public struct Advice: Sendable, Equatable {
                     lesson = Lesson(number: number, title: title, body: "")
                     lessonBody = []
                 }
-                if !remainder.isEmpty { Self.add(remainder, to: heading, doNow: &doNow, score: &scoreLines, why: &why, lessonBody: &lessonBody) }
+                if !remainder.isEmpty { Self.add(remainder, to: heading, doNow: &doNow, score: &scoreLines, goal: &goalLines, why: &why, lessonBody: &lessonBody) }
                 continue
             }
             guard let section else {
                 rest.append(String(rawLine))
                 continue
             }
-            if !line.isEmpty { Self.add(line, to: section, doNow: &doNow, score: &scoreLines, why: &why, lessonBody: &lessonBody) }
+            if !line.isEmpty { Self.add(line, to: section, doNow: &doNow, score: &scoreLines, goal: &goalLines, why: &why, lessonBody: &lessonBody) }
         }
         score = scoreLines.map(ScoreLine.init(line:))
+        goal = goalLines.isEmpty ? nil : goalLines.joined(separator: " ")
         if lesson != nil { lesson?.body = lessonBody.joined(separator: " ") }
         self.rest = rest.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -85,16 +89,18 @@ public struct Advice: Sendable, Equatable {
     }
 
     private enum Section {
-        case doNow, score, why
+        case doNow, score, goal, why
         case lesson(number: Int?, title: String)
     }
 
     private static func add(
-        _ line: String, to section: Section, doNow: inout [String], score: inout [String], why: inout [String], lessonBody: inout [String]
+        _ line: String, to section: Section, doNow: inout [String], score: inout [String], goal: inout [String], why: inout [String],
+        lessonBody: inout [String]
     ) {
         switch section {
         case .doNow: addItem(line, to: &doNow)
         case .score: addItem(line, to: &score)
+        case .goal: goal.append(line)
         case .why: addItem(line, to: &why)
         case .lesson: lessonBody.append(line)
         }
@@ -143,6 +149,7 @@ public struct Advice: Sendable, Equatable {
         switch label.lowercased() {
         case "do this now": return (.doNow, remainderText)
         case "score": return (.score, remainderText)
+        case "goal": return (.goal, remainderText)
         case "why": return (.why, remainderText)
         default: break
         }

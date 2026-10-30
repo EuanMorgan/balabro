@@ -12,7 +12,7 @@ import SwiftUI
 /// │ 2 Play Q-Q-6-6                │
 /// │ Two Pair        [46] × [2] = 92 │  chip blue and mult red, as in the game
 /// │                               │  everything above stays put; everything below scrolls
-/// │ Why  ▸                        │  collapsed by default, one tap to open
+/// │ Why ▸ Going for a Straight    │  the goal stays visible, the reasons open with one tap
 /// │ Lesson 12                     │  mult-red label
 /// │ Straights in the middle cards │  title, then the lesson in full
 /// │ ───────────────────────────── │
@@ -176,12 +176,13 @@ struct AdviceView: View {
                     Button {
                         showWhy.toggle()
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("Why")
                                 .font(Theme.pixelFont(2))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 10, weight: .heavy))
                                 .rotationEffect(.degrees(showWhy ? 90 : 0))
+                            if let goal = advice.goal { Goal(text: goal).padding(.leading, 2) }
                         }
                         .foregroundStyle(Theme.muted)
                         .contentShape(Rectangle())
@@ -200,6 +201,7 @@ struct AdviceView: View {
                     }
                 }
             }
+            if advice.why.isEmpty, let goal = advice.goal { Goal(text: goal) }
             if let lesson = advice.lesson {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(lesson.number.map { "Lesson \($0)" } ?? "Lesson")
@@ -369,6 +371,14 @@ private struct ScoreRow: View {
 
     private func symbol(_ text: String) -> some View {
         Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+    }
+}
+
+private struct Goal: View {
+    let text: String
+
+    var body: some View {
+        SuitText(text, size: 13, weight: .semibold).foregroundStyle(Theme.text)
     }
 }
 

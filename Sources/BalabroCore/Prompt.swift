@@ -19,6 +19,9 @@ enum Prompt {
         - Two Pair: 46 x 2 = 92
         - Full House, if you draw it: 76 x 4 = 304
 
+        **Goal:** At most eight words on what this is building towards, such as "Going for a Straight" or "Saving up for a \
+        second joker".
+
         **Why:**
         - At most four bullets, one line each, no nested bullets.
         - Show the score maths against the blind target, such as "Pair of Kings: (10 + 10 + 10) x 2 = 60".
@@ -42,7 +45,7 @@ enum Prompt {
         "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
         in the shop, in a pack and at a blind select.
         - Lead with the action. No preamble, no recap of the state, no closing summary.
-        - At a blind select, the whole answer is one step and one bullet, unless the Boss Blind's rule or a skip tag \
+        - At a blind select, the whole answer is one step, the Goal and one bullet, unless the Boss Blind's rule or a skip tag \
         changes the plan.
         - Keep a running plan for the run (the hand type to build, the jokers to look for). Mention it only when it changes.
         - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
@@ -60,7 +63,7 @@ enum Prompt {
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \
-        complete new steps, then a **Score:** block at a play or discard decision, then a **Why:** block. These replace the steps on screen.
+        complete new steps, then a **Score:** block at a play or discard decision, then a **Goal:** line and a **Why:** block. These replace the steps on screen.
         """
 
     static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {

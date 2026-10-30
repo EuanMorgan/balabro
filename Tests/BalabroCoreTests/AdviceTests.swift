@@ -88,4 +88,27 @@ struct AdviceTests {
         let a = Advice(markdown: "**Score:**\n- Pair: **about 60**")
         #expect(a.score == [.init(label: "Pair: about 60")])
     }
+
+    @Test func goalIsOneLineApartFromTheReasons() {
+        let a = Advice(markdown: """
+            **Do this now:**
+            1. Discard 7♠.
+
+            **Goal:** Going for a Straight
+
+            **Why:**
+            - 4 outs.
+            """)
+        #expect(a.goal == "Going for a Straight")
+        #expect(a.why == ["4 outs."])
+        #expect(a.doNow == ["Discard 7♠."])
+    }
+
+    @Test func goalOnItsOwnLineUnderTheHeadingStillParses() {
+        #expect(Advice(markdown: "**Goal:**\nSaving up for a joker").goal == "Saving up for a joker")
+    }
+
+    @Test func answerWithoutAGoalHasNone() {
+        #expect(Advice(markdown: "**Do this now:**\n1. Discard 7♠.").goal == nil)
+    }
 }

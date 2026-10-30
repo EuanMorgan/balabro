@@ -55,6 +55,7 @@ enum Previews {
             .init(label: "Two Pair", sum: .init(chips: "46", mult: "2", total: "92")),
             .init(label: "Full House, if you draw it", sum: .init(chips: "79", mult: "4", total: "316")),
         ],
+        goal: "Going for a Full House",
         why: [
             "Big Blind needs 450. Two Pair K-K-3-3 scores (20 + 26) × 2 = **92**.",
             "A Full House K-K-K-3-3 scores (40 + 39) × 4 = **316**, more than three times as much.",

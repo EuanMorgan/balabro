@@ -387,13 +387,13 @@ public struct CoachView: Sendable, Equatable {
             (self.question, self.reply, self.changedSteps) = (question, reply, changedSteps)
         }
 
-        /// New steps replace the plan's and take its score and reasons with them, because those belong to the old steps.
+        /// New steps replace the plan's and take its score, goal and reasons with them, because those belong to the old steps.
         init(question: String, answer: String, plan: inout Advice?) {
             let parsed = Advice(markdown: answer)
             let changedSteps = !parsed.doNow.isEmpty
             if changedSteps {
                 var updated = plan ?? Advice(doNow: [], why: [], lesson: nil, rest: "")
-                (updated.doNow, updated.score, updated.why) = (parsed.doNow, parsed.score, parsed.why)
+                (updated.doNow, updated.score, updated.goal, updated.why) = (parsed.doNow, parsed.score, parsed.goal, parsed.why)
                 plan = updated
             }
             if let lesson = parsed.lesson { plan?.lesson = lesson }

@@ -295,6 +295,18 @@ struct CoachTests {
         #expect(state.view.standing == nil)
     }
 
+    @Test func replyWithNewStepsReplacesTheGoal() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Discard.\n\n**Goal:** Going for a Straight", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("Because.", SessionID(rawValue: "S1"))))
+        #expect(state.view.advice?.goal == "Going for a Straight")
+        _ = coach.reduce(&state, .ask("flush instead?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Yes.\n\n**Do this now:**\n1. Keep hearts.\n\n**Goal:** Going for a Flush", SessionID(rawValue: "S2"))))
+        #expect(state.view.advice?.goal == "Going for a Flush")
+    }
+
     @Test func replyWithNewStepsDropsTheOldScore() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
