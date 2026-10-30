@@ -182,7 +182,7 @@ struct CoachTests {
     @Test func deletedSaveEndsTheRun() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
-        #expect(actions(coach.reduce(&state, .saveRemoved(profile: 1))) == [.cancelTurn(TurnID(0))])
+        #expect(actions(coach.reduce(&state, .saveRemoved(profile: 1))) == [.cancelTurn(TurnID(0)), .readProgress(after: coach.progressSettleDelay)])
         #expect(state.view.status == .waitingForRun)
         #expect(coach.reduce(&state, .ask("hello?", withScreenshot: false)).isEmpty)
         #expect(state.view.problem == .noRun)
@@ -354,6 +354,84 @@ struct CoachTests {
 
     func sentRequests(_ effects: [CoachEffect]) -> [TurnRequest] {
         effects.compactMap { if case .startTurn(let request) = $0 { request } else { nil } }
+    }
+
+    let progress = PlayerProgress(
+        career: CareerStats(), decks: [.init(key: CenterKey(rawValue: "b_blue"), highestWin: 1, wins: 1, losses: 5, highestStart: 2)],
+        locked: [CenterKey(rawValue: "b_magic")])
+
+    func wonSave() throws -> RunSnapshot {
+        let text = Fixture.saveText("04-round-eval").replacingOccurrences(of: #"["won"]=false"#, with: #"["won"]=true"#)
+        return try SaveFile.decode(Data(text.utf8), profile: 1)
+    }
+
+    @Test func theEndOfARunSuggestsTheNextOne() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+        #expect(actions(coach.reduce(&state, .saveRemoved(profile: 1))) == [.readProgress(after: coach.progressSettleDelay)])
+
+        let request = try #require(sentRequests(coach.reduce(&state, .progressRead(progress))).first)
+        #expect(request.forkFrom == nil)
+        #expect(request.message.text.hasPrefix("DECISION: which deck and stake"))
+        #expect(request.message.text.contains("- b_blue. Won on stake_white at best, 5 losses. Can start on stakes up to stake_red."))
+        #expect(request.message.text.contains("Decks still locked: b_magic (win with the Red Deck)"))
+        #expect(state.view.waitingOn == .blindSelect)
+
+        _ = coach.reduce(&state, .turnOutput(request.id, .done("**Do this now:**\n1. Start a run with the Blue Deck on Red Stake.", SessionID(rawValue: "N"))))
+        #expect(state.view.headline == "Your next run")
+        #expect(state.view.advice?.doNow == ["Start a run with the Blue Deck on Red Stake."])
+    }
+
+    @Test func winningSuggestsTheNextRunOnlyOnce() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("Play.", SessionID(rawValue: "S0"))))
+        #expect(actions(coach.reduce(&state, .saveWritten(try wonSave()))) == [.readProgress(after: coach.progressSettleDelay)])
+        #expect(actions(coach.reduce(&state, .saveWritten(try wonSave()))).isEmpty)
+    }
+
+    @Test func aRoundEndWithoutAWinDoesNotSuggestANextRun() throws {
+        var state = CoachState(restoring: [])
+        #expect(actions(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)
+    }
+
+    @Test func theNextRunsAdviceStaysOutOfTheRunsConversation() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("Play.", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .saveWritten(try wonSave()))
+        let request = try #require(sentRequests(coach.reduce(&state, .progressRead(progress))).first)
+        #expect(request.forkFrom == nil)
+        _ = coach.reduce(&state, .turnOutput(request.id, .done("**Do this now:**\n1. Start a run.", SessionID(rawValue: "N"))))
+        #expect(state.view.headline == "Your next run")
+
+        let next = try #require(sentRequests(coach.reduce(&state, .saveWritten(try snap("05-shop")))).first)
+        #expect(next.forkFrom == SessionID(rawValue: "S0"))
+        #expect(state.view.headline != "Your next run")
+    }
+
+    @Test func aRunStartedInTheMeantimeCancelsTheSuggestion() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("Play.", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .saveRemoved(profile: 1))
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        #expect(sentRequests(coach.reduce(&state, .progressRead(progress))).isEmpty)
+    }
+
+    @Test func thePlayerCanAskForTheNextRunWithNoRunGoing() throws {
+        var state = CoachState(restoring: [])
+        #expect(coach.reduce(&state, .adviseNextRun) == [.readProgress(after: .zero)])
+        let request = try #require(sentRequests(coach.reduce(&state, .progressRead(progress))).first)
+        _ = coach.reduce(&state, .turnOutput(request.id, .failed(.notLoggedIn)))
+        #expect(state.view.canRetry)
+        #expect(sentRequests(coach.reduce(&state, .retry)).first?.message.text.hasPrefix("DECISION: which deck") == true)
+    }
+
+    @Test func noProfileMeansNoSuggestion() throws {
+        var state = CoachState(restoring: [])
+        #expect(coach.reduce(&state, .progressRead(nil)).isEmpty)
     }
 
     @Test func chipsNeededComesFromTheNewestSave() throws {

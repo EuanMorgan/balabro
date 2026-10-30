@@ -16,7 +16,7 @@ public struct GameText: Sendable {
 
     public static let missing = GameText(entries: [:])
 
-    /// Parses `descriptions.{Joker,Tarot,Planet,Spectral,Voucher,Tag,Blind,Enhanced,Edition,Other,Back}`.
+    /// Parses `descriptions.{Joker,Tarot,Planet,Spectral,Voucher,Tag,Blind,Enhanced,Edition,Other,Back,Stake}`.
     public init(enUSLua source: String) throws(SaveFileError) {
         guard case .table(let root) = try LuaLiteral.parse(source), case .table(let descriptions)? = root["descriptions"] else {
             throw .unexpectedShape(path: "descriptions")
@@ -35,7 +35,7 @@ public struct GameText: Sendable {
         self.entries = entries
     }
 
-    static let sets = ["Joker", "Tarot", "Planet", "Spectral", "Voucher", "Tag", "Blind", "Enhanced", "Edition", "Other", "Back"]
+    static let sets = ["Joker", "Tarot", "Planet", "Spectral", "Voucher", "Tag", "Blind", "Enhanced", "Edition", "Other", "Back", "Stake"]
 
     /// `"{X:mult,C:white} X#1# {} Mult"` -> `"X#1# Mult"`.
     static func stripTags(_ line: String) -> String {

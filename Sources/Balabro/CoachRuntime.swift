@@ -17,6 +17,7 @@ final class CoachRuntime {
     @ObservationIgnored private let store: RunStore
     @ObservationIgnored private let claude: ClaudeInvocation?
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var savesRoot: URL?
 
     init(coach: Coach, store: RunStore, claude: ClaudeInvocation?) {
         let state = CoachState(restoring: store.loadAll())
@@ -26,12 +27,14 @@ final class CoachRuntime {
     /// Consumes save events until the app quits. The watcher's first events are the saves already on disk,
     /// which is how a restart reattaches to the run in progress (and drops it if already coached).
     func start(watching root: URL) async {
+        savesRoot = root
         for await event in SaveWatcher(root: root).events() { send(event) }
     }
 
     func ask(_ question: String, withScreenshot: Bool) { send(.ask(question, withScreenshot: withScreenshot)) }
     func retry() { send(.retry) }
     func refresh() { send(.refresh) }
+    func adviseNextRun() { send(.adviseNextRun) }
 
     private func send(_ event: CoachEvent) {
         let effects = coach.reduce(&state, event)
@@ -56,6 +59,11 @@ final class CoachRuntime {
             Task {
                 try? await Task.sleep(for: delay)
                 send(.screenshot(id, png: await GameWindow.capturePNG()))
+            }
+        case .readProgress(let delay):
+            Task {
+                try? await Task.sleep(for: delay)
+                send(.progressRead(savesRoot.flatMap(StatsData.progress)))
             }
         case .save(let record):
             // Synchronous: a few KB, and the file order must match the state order.

@@ -18,6 +18,12 @@ public enum SaveFile {
         try CareerStats(lua: LuaLiteral.parse(text(of: bytes)))
     }
 
+    /// `meta` is nil if the file couldn't be read.
+    public static func decodeProgress(profile: Data, meta: Data?) throws(SaveFileError) -> PlayerProgress {
+        let metaValue = meta.flatMap { try? LuaLiteral.parse(text(of: $0)) }
+        return PlayerProgress(profile: try LuaLiteral.parse(text(of: profile)), meta: metaValue)
+    }
+
     private static func text(of bytes: Data) throws(SaveFileError) -> String {
         bytes.starts(with: Data("return".utf8)) ? String(decoding: bytes, as: UTF8.self) : try inflateRaw(bytes)
     }
@@ -82,6 +88,36 @@ private struct Node {
     /// `ipairs` order, each element with its own path.
     var elements: [Node] {
         (table?.array ?? []).enumerated().map { Node(value: $1, path: "\(path)[\($0 + 1)]") }
+    }
+}
+
+extension PlayerProgress {
+    /// Lenient, like `CareerStats`: a missing `meta.jkr` only leaves out decks that haven't been played yet.
+    init(profile: LuaValue, meta: LuaValue?) {
+        let root = Node(value: profile, path: "")
+        let usage = root.child("deck_usage")
+        let unlocked = meta.flatMap { Node(value: $0, path: "").child("unlocked")?.table?.named } ?? [:]
+        let everything = root.child("all_unlocked")?.bool == true
+        var decks: [Deck] = []
+        var locked: [CenterKey] = []
+        for (key, _) in Self.allDecks {
+            let played = usage?.child(key.rawValue)
+            guard everything || key.rawValue == "b_red" || played != nil || unlocked[key.rawValue] == .bool(true) else {
+                locked.append(key)
+                continue
+            }
+            func tally(_ name: String) -> [Int: Double] {
+                (played?.child(name)?.table?.indexed ?? [:]).compactMapValues { if case .number(let n) = $0 { n } else { nil } }
+            }
+            let wins = tally("wins")
+            let highestWin = wins.filter { $0.value > 0 }.keys.max() ?? 0
+            decks.append(Deck(
+                key: key, highestWin: highestWin,
+                // A win also counts on every lower stake (`set_deck_win`), so only the highest stake's count is real.
+                wins: Int(wins[highestWin] ?? 0), losses: Int(tally("losses").values.reduce(0, +)),
+                highestStart: everything ? Self.stakes.count : min(highestWin + 1, Self.stakes.count)))
+        }
+        (career, self.decks, self.locked) = (CareerStats(lua: profile), decks, locked)
     }
 }
 

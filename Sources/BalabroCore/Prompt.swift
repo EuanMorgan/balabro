@@ -173,6 +173,35 @@ enum Prompt {
             """
     }
 
+    static func nextRun(_ progress: PlayerProgress, _ text: GameText) -> String {
+        let career = progress.career
+        var lines = [
+            "DECISION: which deck and stake to start the next run with. The player picks both on the New Run screen.",
+            "Answer with one step naming the deck and stake, such as \"Start a run with the Blue Deck on Red Stake.\", then the Goal and the Why. "
+                + "Leave out the Score block. Only name a deck and stake listed below as available. Pick what will teach this player the most "
+                + "while still being winnable for them, such as a stake up after a win, a deck that suits how they play, or something easier after a run of losses.",
+            "Record: \(career.wins) wins, \(career.losses) losses. Best hand \(chips(career.bestHand)). Furthest ante \(career.furthestAnte).",
+        ]
+        if !career.hands.isEmpty { lines.append("Most played hands: " + career.hands.prefix(4).map { "\($0.name) (\($0.count))" }.joined(separator: ", ")) }
+        if !career.jokers.isEmpty { lines.append("Most used jokers: " + career.jokers.prefix(8).map { name(CenterKey(rawValue: $0.name), text) }.joined(separator: ", ")) }
+        lines.append("Decks available:")
+        for deck in progress.decks {
+            let description = text[deck.key].map { ": " + $0.text.joined(separator: " ") } ?? ""
+            let won = deck.highestWin > 0 ? "Won on \(name(PlayerProgress.stakes[deck.highestWin - 1], text)) at best" : "No wins"
+            lines.append("- \(name(deck.key, text))\(description). \(won), \(deck.losses) losses. Can start on stakes up to \(name(PlayerProgress.stakes[deck.highestStart - 1], text)).")
+        }
+        lines.append("Stakes, from easiest (each one includes all the ones before it):")
+        for stake in PlayerProgress.stakes {
+            let description = text[stake].map { ": " + $0.text.filter { !$0.hasPrefix("Applies") }.joined(separator: " ") } ?? ""
+            lines.append("- \(name(stake, text))\(description)")
+        }
+        if !progress.locked.isEmpty {
+            let unlocks = PlayerProgress.allDecks.filter { progress.locked.contains($0.key) }.map { "\(name($0.key, text)) (\($0.unlock))" }
+            lines.append("Decks still locked: " + unlocks.joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n")
+    }
+
     static let refresh = """
         THE PLAYER PRESSED REFRESH because the steps on screen look wrong or out of date. Look at the attached screenshot \
         and answer in the usual shape for what's on screen now. Where the screenshot and any state above disagree, trust \

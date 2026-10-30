@@ -21,6 +21,8 @@ public struct Coach: Sendable {
     /// Claude says within seconds if the pack isn't up yet, so looking again costs little.
     public var packRetryDelay: Duration = .milliseconds(1500)
     public var maxPackLooks = 5
+    /// The game writes `profile.jkr` at most every 5 s (`F_SAVE_TIMER`), so this waits for a run's result to reach it.
+    public var progressSettleDelay: Duration = .seconds(6)
 
     public init(text: GameText) { self.text = text }
 
@@ -34,6 +36,7 @@ public struct Coach: Sendable {
                 state.current = key
             }
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
+            let justWon = snapshot.won && record.summary?.won != true
             record.progress = snapshot.progress
             record.summary = RunSummary(snapshot, previous: record.summary)
             state.latestSnapshot = snapshot
@@ -47,7 +50,9 @@ public struct Coach: Sendable {
             default: break
             }
             guard let decision = Decision.detect(in: snapshot, text: text),
-                  decision.fingerprint != state.newestFingerprint else { return effects }
+                  decision.fingerprint != state.newestFingerprint else {
+                return justWon ? effects + [.readProgress(after: progressSettleDelay)] : effects
+            }
             if state.activity.purpose?.isQuestion == true {
                 state.waitingDecision = decision
                 return effects
@@ -67,7 +72,8 @@ public struct Coach: Sendable {
             state.current = nil
             state.latestSnapshot = nil
             state.chipsNeeded = nil
-            return effects
+            state.nextRun = nil
+            return effects + [.readProgress(after: progressSettleDelay)]
 
         case .saveUnreadable(_, let error):
             state.problem = .saveUnreadable(error)
@@ -82,6 +88,7 @@ public struct Coach: Sendable {
                 state.problem = .noRun
                 return []
             }
+            state.nextRun = nil
             guard case .idle = state.activity else {
                 state.queuedQuestion = [state.queuedQuestion, question].compactMap { $0 }.joined(separator: "\n")
                 return []
@@ -89,7 +96,7 @@ public struct Coach: Sendable {
             return withScreenshot ? capture(.question(question), after: .zero, &state) : start(.question(question), &state)
 
         case .turnOutput(let id, let output):
-            guard case .running(var turn) = state.activity, turn.id == id, let key = state.current else { return [] }
+            guard case .running(var turn) = state.activity, turn.id == id else { return [] }
             switch output {
             case .started:
                 return []
@@ -98,6 +105,12 @@ public struct Coach: Sendable {
                 state.activity = .running(turn)
                 return []
             case .done(let answer, let session):
+                if case .nextRun = turn.purpose {
+                    state.nextRun = answer
+                    state.activity = .idle
+                    return startNext(&state)
+                }
+                guard let key = state.current else { return [] }
                 if turn.sawScreen, turn.purpose.canLookAgain, answer.contains(Prompt.packNotReady) {
                     // The session isn't kept, so this look leaves no trace in the conversation.
                     state.packLooks += 1
@@ -134,10 +147,22 @@ public struct Coach: Sendable {
             let effects: [CoachEffect] = if case .running(let turn) = state.activity { [.cancelTurn(turn.id)] } else { [] }
             let decision = state.latestSnapshot.flatMap { Decision.detect(in: $0, text: text) }
             return effects + begin(.refresh(decision), &state)
+
+        case .adviseNextRun:
+            guard case .idle = state.activity, state.current == nil else { return [] }
+            return [.readProgress(after: .zero)]
+
+        // By now the player may have started another run or carried on into Endless Mode.
+        case .progressRead(let progress):
+            guard case .idle = state.activity, let progress else { return [] }
+            let onWinScreen = state.latestSnapshot.map { $0.won && Decision.detect(in: $0, text: text) == nil } ?? false
+            guard state.current == nil || onWinScreen else { return [] }
+            return begin(.nextRun(prompt: Prompt.nextRun(progress, text)), &state)
         }
     }
 
     private func begin(_ purpose: CoachState.Purpose, _ state: inout CoachState) -> [CoachEffect] {
+        state.nextRun = nil
         if case .decision(let decision) = purpose {
             state.waitingDecision = nil
             if let answer = decision.instantAnswer, let key = state.current, var record = state.runs[key] {
@@ -169,19 +194,23 @@ public struct Coach: Sendable {
     private func start(
         _ purpose: CoachState.Purpose, screenshot: Data? = nil, screenshotFailed: Bool = false, packUnseen: Bool = false, _ state: inout CoachState
     ) -> [CoachEffect] {
-        guard let key = state.current, let record = state.runs[key] else { return [] }
+        let record = state.current.flatMap { state.runs[$0] }
+        if case .nextRun = purpose {} else if record == nil { return [] }
         let text = switch purpose {
         case .decision(let decision): screenshotFailed || packUnseen ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
         case .refresh(let decision):
             [decision?.prompt, Prompt.refresh, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
+        case .nextRun(let prompt): prompt
         }
-        let rules = record.head != nil && record.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
+        // The next run's advice is a conversation of its own, because it isn't part of the run just played.
+        let conversation = if case .nextRun = purpose { RunRecord?.none } else { record }
+        let rules = conversation?.head != nil && conversation?.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
         let id = TurnID(state.takeID())
         state.activity = .running(.init(id: id, purpose: purpose, partial: "", sawScreen: screenshot != nil))
         state.retryable = nil
         state.problem = screenshotFailed ? .screenRecordingDenied : nil
-        return [.startTurn(TurnRequest(id: id, forkFrom: record.head, message: UserMessage(text: rules + text, screenshotPNG: screenshot)))]
+        return [.startTurn(TurnRequest(id: id, forkFrom: conversation?.head, message: UserMessage(text: rules + text, screenshotPNG: screenshot)))]
     }
 
     private func startNext(_ state: inout CoachState) -> [CoachEffect] {
@@ -204,6 +233,8 @@ public struct CoachState: Sendable {
     var problem: Problem?
     var chipsNeeded: Double?
     var latestSnapshot: RunSnapshot?
+    /// Claude's advice on the next run, until a decision or question replaces it.
+    var nextRun: String?
     var packLooks = 0
     var nextID = 0
 
@@ -226,9 +257,12 @@ public struct CoachState: Sendable {
         let canRetry = retryable != nil && activity.isIdle
         if let purpose = activity.purpose, !purpose.isQuestion {
             return CoachView(
-                status: status, headline: purpose.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? purpose.decision?.kind : nil,
+                status: status, headline: purpose.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? purpose.waitingKind : nil,
                 advice: partial.isEmpty ? nil : Advice(markdown: partial), sawScreen: sawScreen, thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
+        }
+        if let nextRun {
+            return CoachView(status: status, headline: Purpose.nextRunTitle, advice: Advice(markdown: nextRun), thread: [], queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
         let history = current.flatMap { runs[$0] }?.transcript ?? []
         let planIndex = history.lastIndex { !$0.isQuestion }
@@ -293,19 +327,24 @@ public struct CoachState: Sendable {
         case question(String)
         /// nil when the newest save isn't a decision the app recognises, so only the screenshot can say what's going on.
         case refresh(Decision?)
+        case nextRun(prompt: String)
+
+        static let nextRunTitle = "Your next run"
 
         var decision: Decision? {
             switch self {
             case .decision(let d), .refresh(let d?): d
-            case .question, .refresh(nil): nil
+            case .question, .refresh(nil), .nextRun: nil
             }
         }
+        /// Picking a deck is closest to the cards being shuffled for a blind.
+        var waitingKind: Decision.Kind? { if case .nextRun = self { .blindSelect } else { decision?.kind } }
         var isQuestion: Bool { if case .question = self { true } else { false } }
         var canLookAgain: Bool {
             switch self {
             case .decision(let d): d.needsScreenshot
             case .refresh: true
-            case .question: false
+            case .question, .nextRun: false
             }
         }
 
@@ -314,6 +353,7 @@ public struct CoachState: Sendable {
             case .decision(let d), .refresh(let d?): d.title
             case .question(let q): q
             case .refresh(nil): "What's on your screen"
+            case .nextRun: Self.nextRunTitle
             }
         }
     }
@@ -335,6 +375,8 @@ public enum CoachEvent: Sendable {
     case turnOutput(TurnID, TurnOutput)
     case retry
     case refresh
+    case adviseNextRun
+    case progressRead(PlayerProgress?)
 }
 
 public enum CoachEffect: Sendable, Hashable {
@@ -342,6 +384,7 @@ public enum CoachEffect: Sendable, Hashable {
     /// Kill the process. Its forked session is simply never used again.
     case cancelTurn(TurnID)
     case captureGameWindow(CaptureID, after: Duration)
+    case readProgress(after: Duration)
     case save(RunRecord)
 }
 

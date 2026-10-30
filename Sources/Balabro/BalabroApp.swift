@@ -15,6 +15,9 @@ enum BalabroApp {
         if let save = value(after: "--print-prompt", in: arguments) {
             exit(await printPrompt(URL(filePath: save)))
         }
+        if let root = value(after: "--print-next-run", in: arguments) {
+            exit(await printNextRun(URL(filePath: root)))
+        }
         if arguments.contains("--locate-claude") {
             exit(await locateClaude())
         }
@@ -57,6 +60,18 @@ enum BalabroApp {
         var state = CoachState(restoring: [])
         _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
         print("Kind: \(label(decision.kind))\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
+        return 0
+    }
+
+    /// Prints what the coach is told when suggesting the next run, from a saves folder such as `~/Library/Application Support/Balatro`.
+    private static func printNextRun(_ root: URL) async -> Int32 {
+        var state = CoachState(restoring: [])
+        let coach = Coach(text: await GameInstall.find()?.loadText() ?? .missing)
+        guard case .startTurn(let request)? = coach.reduce(&state, .progressRead(StatsData.progress(savesRoot: root))).first else {
+            print("No profile in \(root.path)")
+            return 1
+        }
+        print(request.message.text)
         return 0
     }
 

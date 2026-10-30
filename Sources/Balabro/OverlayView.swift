@@ -26,7 +26,7 @@ struct OverlayView: View {
     let updater: Updater?
 
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, update: updater?.status ?? .none, install: {
+        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, adviseNextRun: runtime.adviseNextRun, update: updater?.status ?? .none, install: {
             Task { if await updater?.install() == true { NSApp.terminate(nil) } }
         }, screenAccess: ScreenAccess.isGranted)
     }
@@ -37,6 +37,7 @@ struct OverlayContent: View {
     let ask: (_ question: String, _ withScreenshot: Bool) -> Void
     let retry: () -> Void
     var refresh: () -> Void = {}
+    var adviseNextRun: () -> Void = {}
     var update = Updater.Status.none
     var install: () -> Void = {}
     var screenAccess = true
@@ -162,8 +163,11 @@ struct OverlayContent: View {
     @ViewBuilder private var placeholder: some View {
         switch view.status {
         case .waitingForRun:
-            Placeholder(title: "Waiting for a run",
-                        detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
+            VStack(alignment: .leading, spacing: 12) {
+                Placeholder(title: "Waiting for a run",
+                            detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
+                ChipButton("What should I play next?", action: adviseNextRun)
+            }
         case .lookingAtPack, .thinking, .answering:
             Placeholder(title: "Reading the board")
         case .ready:
