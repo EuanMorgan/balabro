@@ -40,6 +40,10 @@ enum Prompt {
         - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
+        - The game hides the name and text of anything the player hasn't discovered yet, showing "Not Discovered". So \
+        whenever you name a card, joker, voucher or pack in the shop or in an open pack, and there's more than one in \
+        its row, say where it is, such as "Buy the left joker, Crafty Joker ($4)" or "Pick the 2nd card from the left, \
+        The Fool". For the player's own jokers, count from the left too.
         - You get the new game state automatically after every move, so never ask the player to send or show you the \
         new hand.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
@@ -168,15 +172,18 @@ enum Prompt {
     private static func shopLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
         guard let shop = s.shop else { return [] }
         var lines = ["Shop (reroll $\(shop.rerollCost)):"]
-        for item in shop.cards + shop.vouchers + shop.boosters {
-            let description: String = switch item.card {
-            case .joker(let j): joker(j, text, kind: "joker", sellValue: false)
-            case .consumable(let c): describe(c.key, edition: c.edition, text)
-            case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
-            case .voucher(let key): describe(key, edition: nil, text, kind: "voucher")
-            case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
+        for (row, items) in [("Cards", shop.cards), ("Vouchers", shop.vouchers), ("Packs", shop.boosters)] where !items.isEmpty {
+            lines.append("\(row) (left to right):")
+            for item in items {
+                let description: String = switch item.card {
+                case .joker(let j): joker(j, text, kind: "joker", sellValue: false)
+                case .consumable(let c): describe(c.key, edition: c.edition, text)
+                case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
+                case .voucher(let key): describe(key, edition: nil, text, kind: "voucher")
+                case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
+                }
+                lines.append("- $\(item.cost) \(description)")
             }
-            lines.append("- $\(item.cost) \(description)")
         }
         return lines
     }

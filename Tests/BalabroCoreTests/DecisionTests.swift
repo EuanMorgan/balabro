@@ -75,4 +75,11 @@ struct DecisionTests {
     @Test func tagsThatDontFireOnABlindChoiceAreSkippedOver() throws {
         #expect(try blindSelect(holding: ["tag_handy", "tag_charm"])?.needsScreenshot == true)
     }
+
+    @Test func shopPromptListsEachRowLeftToRight() throws {
+        let prompt = try #require(try decision("05-shop")?.prompt)
+        #expect(prompt.contains("Packs (left to right):\n- $4 Buffoon Pack: 2 cards, choose 1\n- $4 Arcana Pack: 3 cards, choose 1"))
+        #expect(prompt.contains("Cards (left to right):\n- $3 "))
+        #expect(prompt.contains("Vouchers (left to right):\n- $10 "))
+    }
 }
