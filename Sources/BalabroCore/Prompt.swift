@@ -12,7 +12,8 @@ enum Prompt {
 
         **Do this now:**
         1. One concrete action per step, in the order the player does them.
-        2. Name cards exactly as written in the state, such as "Discard 7♣ 4♣ 2♠" or "Buy Gluttonous Joker ($5)".
+        2. Name cards exactly as written in the state, such as "Discard 7♣ 4♣ 2♠" or "Buy Gluttonous Joker ($5)". \
+        List them in the order they sit in the hand, left to right, because the player selects them that way.
 
         **Score:**
         - Two Pair: 46 x 2 = 92
