@@ -204,6 +204,84 @@ struct CoachTests {
         #expect(state.view.advice?.doNow == ["Discard 7♠"])
     }
 
+    func stateWithPlan() throws -> CoachState {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done(
+            "**Do this now:**\n1. Discard 7♠.\n\n**Why:**\n- It pairs with nothing.\n\n**Lesson 1: Discards are free**\nUse them.",
+            SessionID(rawValue: "S0"))))
+        return state
+    }
+
+    @Test func questionRepliesUnderThePlanAndKeepsTheHeadline() throws {
+        var state = try stateWithPlan()
+        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
+        #expect(state.view.thread == [.init(question: "why the 7?", reply: "", changedSteps: false)])
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .text("It pairs")))
+        #expect(state.view.thread == [.init(question: "why the 7?", reply: "It pairs", changedSteps: false)])
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("It pairs with nothing.", SessionID(rawValue: "S1"))))
+        _ = coach.reduce(&state, .ask("and the King?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Keep it.", SessionID(rawValue: "S2"))))
+
+        #expect(state.view.headline == "Ante 1 · bl_small · 4 hands, 4 discards")
+        #expect(state.view.advice?.doNow == ["Discard 7♠."])
+        #expect(state.view.advice?.why == ["It pairs with nothing."])
+        #expect(state.view.thread == [
+            .init(question: "why the 7?", reply: "It pairs with nothing.", changedSteps: false),
+            .init(question: "and the King?", reply: "Keep it.", changedSteps: false),
+        ])
+    }
+
+    @Test func replyWithNewStepsReplacesThePlansStepsAndReasons() throws {
+        var state = try stateWithPlan()
+        _ = coach.reduce(&state, .ask("keep the 7?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done(
+            "Yes, I missed the straight.\n\n**Do this now:**\n1. Play 7♠ 6♠ 5♠ 4♠ 3♠.\n\n**Why:**\n- It beats the blind.",
+            SessionID(rawValue: "S1"))))
+
+        #expect(state.view.advice?.doNow == ["Play 7♠ 6♠ 5♠ 4♠ 3♠."])
+        #expect(state.view.advice?.why == ["It beats the blind."])
+        #expect(state.view.advice?.lesson?.title == "Discards are free")
+        #expect(state.view.thread == [.init(question: "keep the 7?", reply: "Yes, I missed the straight.", changedSteps: true)])
+    }
+
+    @Test func replyInTheDecisionShapeWithoutNewStepsStillShowsItsReason() throws {
+        var state = try stateWithPlan()
+        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("**Why:**\n- No pair.\n- No flush.", SessionID(rawValue: "S1"))))
+
+        #expect(state.view.advice?.why == ["It pairs with nothing."])
+        #expect(state.view.thread == [.init(question: "why the 7?", reply: "No pair. No flush.", changedSteps: false)])
+    }
+
+    @Test func nextDecisionClearsTheThread() throws {
+        var state = try stateWithPlan()
+        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("No pair.", SessionID(rawValue: "S1"))))
+        _ = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
+        #expect(state.view.thread.isEmpty)
+        #expect(state.view.advice == nil)
+
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S2"))))
+        #expect(state.view.thread.isEmpty)
+        #expect(state.view.advice?.doNow == ["Play."])
+    }
+
+    @Test func failedQuestionStaysOnScreenForTheRetry() throws {
+        var state = try stateWithPlan()
+        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .failed(.notLoggedIn)))
+        #expect(state.view.thread == [.init(question: "why the 7?", reply: "", changedSteps: false)])
+        #expect(state.view.canRetry)
+    }
+
+    @Test func recordSavedBeforeQuestionsWereMarkedStillLoads() throws {
+        let json = #"{"title":"Ante 1","advice":"**Do this now:**"}"#
+        let exchange = try JSONDecoder().decode(Exchange.self, from: Data(json.utf8))
+        #expect(exchange.title == "Ante 1")
+        #expect(!exchange.isQuestion)
+    }
+
     @Test func roundEndSaysNothing() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)

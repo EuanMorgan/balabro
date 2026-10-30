@@ -24,7 +24,7 @@ Balabro reads the save file the game already writes, so it needs no mods and cha
 1. Open Balabro. The panel appears, and a Balabro icon appears in the menu bar.
 2. Drag the panel to a corner of the screen. It stays on top of Balatro, even in fullscreen, and remembers where you put it.
 3. Start or continue a run in Balatro. Advice appears a few seconds after each decision.
-4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. Press **Escape** to go back to the game.
+4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. The reply appears under the steps, and the steps change if the answer changes what to do. Your questions clear at the next decision. Press **Escape** to go back to the game.
 5. The first time you open a pack, macOS asks for Screen Recording permission. Allow it, so the coach can see the cards. If you don't, the coach asks you to list them instead.
 
 Balatro writes its save file at most every 5 seconds, so advice can arrive a few seconds after you act. If you make two moves quickly, the coach advises on where you ended up.

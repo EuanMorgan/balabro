@@ -8,10 +8,13 @@ import SwiftUI
 /// │ Ante 3 · Big Blind · hand 2  ●│  headline in the pixel font, status dot
 /// │ Do this now                   │  chip-blue label
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
-/// │ 2 Play Q-Q-6-6                │
+/// │ 2 Play Q-Q-6-6                │  stays put; everything below it scrolls
 /// │ Why  ▸                        │  collapsed by default, one tap to open
 /// │ Lesson 12                     │  mult-red label
 /// │ Straights in the middle cards │  title, then the lesson in full
+/// │ ───────────────────────────── │
+/// │ [why keep the 6?]             │  the player's questions about this decision
+/// │ It pairs with the 6 in…       │  and the replies, until the next decision clears them
 /// │ [ Ask about this…        ] ⌃⌥␣│  the follow-up box
 /// └───────────────────────────────┘
 /// ```
@@ -39,13 +42,24 @@ struct OverlayContent: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
-            ScrollView {
-                content
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if let steps = view.advice?.doNow, !steps.isEmpty {
+                DoThisNow(steps: steps)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 14)
             }
-            .scrollIndicators(.never)
+            ScrollViewReader { scroll in
+                ScrollView {
+                    content
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                        .id(Self.contentID)
+                }
+                .scrollIndicators(.never)
+                .onChange(of: view.thread) {
+                    if !view.thread.isEmpty { scroll.scrollTo(Self.contentID, anchor: .bottom) }
+                }
+            }
             if let queued = view.queuedQuestion {
                 Text("Next: \(queued)")
                     .font(.system(size: 11))
@@ -61,6 +75,8 @@ struct OverlayContent: View {
         .background(Panel())
     }
 
+    private static let contentID = "content"
+
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(view.headline.isEmpty ? "Balabro" : view.headline)
@@ -74,8 +90,15 @@ struct OverlayContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let advice = view.advice ?? (view.status == .ready ? view.history.last.map { Advice(markdown: $0.advice) } : nil) {
-            AdviceView(advice: advice, streaming: view.status == .answering, showWhy: showWhy)
+        if view.advice != nil || !view.thread.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                if let advice = view.advice {
+                    AdviceView(advice: advice, streaming: view.status == .answering && view.thread.isEmpty, showWhy: showWhy)
+                }
+                if !view.thread.isEmpty {
+                    FollowUpThread(thread: view.thread, waiting: view.status != .ready)
+                }
+            }
         } else {
             switch view.status {
             case .waitingForRun:
@@ -103,16 +126,6 @@ struct AdviceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if !advice.doNow.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Do this now")
-                        .font(Theme.pixelFont(2))
-                        .foregroundStyle(Theme.chips)
-                    ForEach(Array(advice.doNow.enumerated()), id: \.offset) { index, step in
-                        StepRow(number: index + 1, text: step)
-                    }
-                }
-            }
             if !advice.why.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Button {
@@ -161,6 +174,54 @@ struct AdviceView: View {
             }
             if streaming {
                 Text("…").font(Theme.pixelFont(2)).foregroundStyle(Theme.chips)
+            }
+        }
+        .textSelection(.enabled)
+    }
+}
+
+private struct DoThisNow: View {
+    let steps: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Do this now")
+                .font(Theme.pixelFont(2))
+                .foregroundStyle(Theme.chips)
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                StepRow(number: index + 1, text: step)
+            }
+        }
+        .textSelection(.enabled)
+    }
+}
+
+private struct FollowUpThread: View {
+    let thread: [CoachView.FollowUp]
+    let waiting: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Rectangle().fill(Theme.feltRaised).frame(height: 1)
+            ForEach(Array(thread.enumerated()), id: \.offset) { index, followUp in
+                VStack(alignment: .leading, spacing: 6) {
+                    SuitText(followUp.question, size: 13, weight: .medium)
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.feltDeep))
+                    if !followUp.reply.isEmpty {
+                        SuitText(followUp.reply, size: 13).foregroundStyle(Theme.text.opacity(0.88))
+                    }
+                    if followUp.changedSteps {
+                        Text("Steps updated above")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.chips)
+                    }
+                    if waiting, index == thread.count - 1 {
+                        Text("…").font(Theme.pixelFont(2)).foregroundStyle(Theme.chips)
+                    }
+                }
             }
         }
         .textSelection(.enabled)

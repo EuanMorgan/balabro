@@ -3,16 +3,17 @@ import AppKit
 import BalabroCore
 import SwiftUI
 
-/// `Balabro --render-previews <dir>` (debug builds only) writes the overlay in three states as PNGs.
+/// `Balabro --render-previews <dir>` (debug builds only) writes the overlay in four states as PNGs.
 @MainActor
 enum Previews {
     static func render(to directory: URL) async -> Int32 {
         _ = await GameInstall.find()?.registerFont()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let states: [(String, CoachView, Bool, CGFloat)] = [
-            ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, history: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420),
-            ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind · hand 1", advice: streaming, history: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420),
-            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, history: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560),
+            ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420),
+            ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind · hand 1", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420),
+            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560),
+            ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520),
         ]
         for (name, view, showWhy, height) in states {
             let url = directory.appending(path: "overlay-\(name).png")
@@ -57,6 +58,11 @@ enum Previews {
         lesson: Advice.Lesson(number: 3, title: "Two Pair is a draw, not a finish",
                               body: "Early in a blind, keep the pairs and throw the rest. You have hands to spare."),
         rest: "")
+
+    private static let thread = [
+        CoachView.FollowUp(question: "Why not keep the 7♠?", reply: "It doesn't pair with anything, and K-K-3-3 only wants a King or a 3. Holding it costs you a draw at **4 outs**.", changedSteps: false),
+        CoachView.FollowUp(question: "I'd rather keep the 2♦ for Hack", reply: "Fair, Hack retriggers it, so it adds chips to any hand it's in.", changedSteps: true),
+    ]
 
     private static let streaming = Advice(
         doNow: ["Discard 7♠ 6♥ 5♠ 2♦.", "Keep K♥ K♣ 3♠ 3♦. Any King"],

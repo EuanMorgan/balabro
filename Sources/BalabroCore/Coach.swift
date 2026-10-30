@@ -85,7 +85,7 @@ public struct Coach: Sendable {
             case .done(let answer, let session):
                 var record = state.runs[key]!
                 record.head = session
-                record.transcript.append(Exchange(title: turn.purpose.title, advice: answer))
+                record.transcript.append(Exchange(title: turn.purpose.title, advice: answer, isQuestion: turn.purpose.isQuestion))
                 if case .decision(let decision) = turn.purpose { record.lastCoached = decision.fingerprint }
                 state.runs[key] = record
                 state.activity = .idle
@@ -160,21 +160,29 @@ public struct CoachState: Sendable {
 
     /// Everything the overlay draws. Derived, never stored, so it can't drift from the state.
     public var view: CoachView {
-        let history = current.flatMap { runs[$0] }?.transcript ?? []
-        let status: CoachView.Status, headline: String, answer: String?
+        let status: CoachView.Status, partial: String
         switch activity {
-        case .idle:
-            status = current == nil ? .waitingForRun : .ready
-            headline = history.last?.title ?? (current == nil ? "Start or continue a run" : "Waiting for your next move")
-            answer = history.last?.advice
-        case .capturing(_, let purpose):
-            (status, headline, answer) = (.lookingAtPack, purpose.title, nil)
-        case .running(let turn):
-            (status, headline, answer) = (turn.partial.isEmpty ? .thinking : .answering, turn.purpose.title, turn.partial.isEmpty ? nil : turn.partial)
+        case .idle: (status, partial) = (current == nil ? .waitingForRun : .ready, "")
+        case .capturing: (status, partial) = (.lookingAtPack, "")
+        case .running(let turn): (status, partial) = (turn.partial.isEmpty ? .thinking : .answering, turn.partial)
+        }
+        let canRetry = retryable != nil && activity.isIdle
+        if let decision = activity.purpose?.decision {
+            return CoachView(
+                status: status, headline: decision.title, advice: partial.isEmpty ? nil : Advice(markdown: partial), thread: [],
+                queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
+        }
+        let history = current.flatMap { runs[$0] }?.transcript ?? []
+        let planIndex = history.lastIndex { !$0.isQuestion }
+        var plan = planIndex.map { Advice(markdown: history[$0].advice) }
+        var thread = history[(planIndex.map { $0 + 1 } ?? 0)...].map { CoachView.FollowUp(question: $0.title, answer: $0.advice, plan: &plan) }
+        if case .question(let question)? = activity.purpose ?? retryable {
+            thread.append(CoachView.FollowUp(question: question, answer: partial, plan: &plan))
         }
         return CoachView(
-            status: status, headline: headline, advice: answer.map(Advice.init(markdown:)), history: history,
-            queuedQuestion: queuedQuestion, problem: problem, canRetry: retryable != nil && activity.isIdle)
+            status: status,
+            headline: planIndex.map { history[$0].title } ?? (current == nil ? "Start or continue a run" : "Waiting for your next move"),
+            advice: plan, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
     }
 
     /// The decision this state last saw, so a duplicate write, or a reread after a restart, starts nothing.
@@ -299,13 +307,24 @@ public struct RunRecord: Sendable, Hashable, Codable {
     /// The session after the last completed turn. The CLI holds the conversation; this points at it.
     public var head: SessionID?
     public var lastCoached: Fingerprint?
-    /// What the overlay shows when scrolled back, and after a restart.
+    /// Rebuilds the overlay's plan and follow-ups after a restart.
     public var transcript: [Exchange]
 }
 
 public struct Exchange: Sendable, Hashable, Codable {
     public var title: String     // "Ante 3 · Big Blind · hand 2", or the player's question
     public var advice: String    // Claude's markdown, verbatim
+    public var isQuestion = false
+}
+
+extension Exchange {
+    /// Records saved before `isQuestion` existed have to keep loading, or the run loses its conversation.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        advice = try container.decode(String.self, forKey: .advice)
+        isQuestion = try container.decodeIfPresent(Bool.self, forKey: .isQuestion) ?? false
+    }
 }
 
 public enum Problem: Sendable, Hashable {
@@ -325,15 +344,40 @@ public struct CoachView: Sendable, Equatable {
     }
     public var status: Status
     public var headline: String
-    /// The current answer, parsed even while partial so "Do this now" shows as soon as it streams.
+    /// The current plan, parsed even while partial so "Do this now" shows as soon as it streams.
     public var advice: Advice?
-    public var history: [Exchange]
+    /// The player's questions about the current decision. A new decision starts it empty.
+    public var thread: [FollowUp]
     public var queuedQuestion: String?
     public var problem: Problem?
     public var canRetry: Bool
 
-    public init(status: Status, headline: String, advice: Advice?, history: [Exchange], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
-        (self.status, self.headline, self.advice, self.history) = (status, headline, advice, history)
+    public init(status: Status, headline: String, advice: Advice?, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        (self.status, self.headline, self.advice, self.thread) = (status, headline, advice, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
+    }
+
+    public struct FollowUp: Sendable, Equatable {
+        public var question: String
+        public var reply: String
+        public var changedSteps: Bool
+
+        public init(question: String, reply: String, changedSteps: Bool) {
+            (self.question, self.reply, self.changedSteps) = (question, reply, changedSteps)
+        }
+
+        /// New steps replace the plan's and take its reasons with them, because the old reasons argue for the old steps.
+        init(question: String, answer: String, plan: inout Advice?) {
+            let parsed = Advice(markdown: answer)
+            let changedSteps = !parsed.doNow.isEmpty
+            if changedSteps {
+                var updated = plan ?? Advice(doNow: [], why: [], lesson: nil, rest: "")
+                (updated.doNow, updated.why) = (parsed.doNow, parsed.why)
+                plan = updated
+            }
+            if let lesson = parsed.lesson { plan?.lesson = lesson }
+            let reply = parsed.rest.isEmpty && !changedSteps ? parsed.why.joined(separator: " ") : parsed.rest
+            self.init(question: question, reply: reply, changedSteps: changedSteps)
+        }
     }
 }
