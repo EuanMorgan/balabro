@@ -79,6 +79,9 @@ enum Prompt {
         attaches one. Never tell the player to look at, check or confirm anything on screen.
         - You get the new game state automatically after every move, so never ask the player to send or show you the \
         new hand.
+        - Tarot, Planet and Spectral cards in an open pack can only be used on the spot or skipped. They can't be kept \
+        for later, so never tell the player to take one into a consumable slot. Only cards bought in the shop go there. \
+        A joker from a pack needs a free joker slot.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
         player opens it.
         - A screenshot can be taken before a pack finishes opening. If a pack decision's screenshot doesn't show the \
