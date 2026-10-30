@@ -6,33 +6,107 @@ import BalabroCore
 @main
 @MainActor
 enum BalabroApp {
-    static func main() {
-        // TODO: `Balabro --print-prompt <save.jkr>` prints the decision kind, title and prompt text for one
-        //       save and exits, so a save from a real run can be checked without starting the overlay.
+    static func main() async {
+        // A claude process that dies before reading stdin must fail the write, not kill the app.
+        signal(SIGPIPE, SIG_IGN)
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        if let save = value(after: "--print-prompt", in: arguments) {
+            exit(await printPrompt(URL(filePath: save)))
+        }
+        if arguments.contains("--locate-claude") {
+            exit(await locateClaude())
+        }
+        #if DEBUG
+        if let directory = value(after: "--render-previews", in: arguments) {
+            exit(await Previews.render(to: URL(filePath: directory)))
+        }
+        #endif
+
         let app = NSApplication.shared
-        let delegate = AppDelegate()
+        let delegate = AppDelegate(savesRoot: value(after: "--saves-root", in: arguments).map { URL(filePath: $0) } ?? SaveWatcher.defaultRoot)
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
+    }
+
+    private static func value(after flag: String, in arguments: [String]) -> String? {
+        arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+    }
+
+    /// Prints the decision kind, title and prompt for one save, so a save from a real run can be
+    /// checked without starting the overlay. The profile comes from the folder name, as in the game.
+    private static func printPrompt(_ url: URL) async -> Int32 {
+        let profile = Int(url.deletingLastPathComponent().lastPathComponent).flatMap { SaveWatcher.profiles.contains($0) ? $0 : nil } ?? 1
+        let snapshot: RunSnapshot
+        switch await SaveWatcher.decodeSettled(at: url, profile: profile) {
+        case .success(let decoded): snapshot = decoded
+        case .failure(let error):
+            FileHandle.standardError.write(Data("Couldn't decode \(url.path): \(error)\n".utf8))
+            return 1
+        }
+        let text = await GameInstall.find()?.loadText() ?? .missing
+        guard let decision = Decision.detect(in: snapshot, text: text) else {
+            print("No decision (\(snapshot.phase))")
+            return 0
+        }
+        var state = CoachState(restoring: [])
+        _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
+        print("Kind: \(decision.kind)\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
+        return 0
+    }
+
+    private static func locateClaude() async -> Int32 {
+        guard let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: AppDelegate.conversations) else {
+            print("claude not found")
+            return 1
+        }
+        print("claude: \(claude.executable.path)\nCLAUDE_CONFIG_DIR: \(claude.configDir?.path ?? "(default)")\nPATH: \(claude.searchPath)")
+        return 0
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// `--resume` only finds sessions filed under the cwd the CLI ran in, so every turn uses this one.
+    static let conversations = URL.applicationSupportDirectory.appending(path: "Balabro/conversations")
+
+    private let savesRoot: URL
     private var runtime: CoachRuntime?
     private var overlay: OverlayPanel?
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem?
 
+    init(savesRoot: URL) { self.savesRoot = savesRoot }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // TODO, in order:
-        //   1. game = GameInstall.find(); text = await game?.loadText() ?? .missing; game?.registerFont()
-        //   2. claude = await ClaudeLocator.resolve(override: Settings.claudeOverride)   // may fail -> overlay shows setup
-        //   3. runtime = CoachRuntime(coach: Coach(text: text), store: RunStore.default, claude: claude)
-        //   4. overlay = OverlayPanel(runtime: runtime); overlay.orderFrontRegardless()
-        //   5. hotKey = HotKey(.default) { overlay.focusQuestionField() }
-        //   6. statusItem menu: Show overlay, Claude settings..., Quit
-        //   7. runtime.start()   // restores runs, then consumes SaveWatcher's events forever
-        fatalError("not implemented")
+        Task { await launch() }
     }
+
+    private func launch() async {
+        let game = GameInstall.find()
+        let text = await game?.loadText() ?? .missing
+        _ = await game?.registerFont()
+        let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: Self.conversations)
+
+        let runtime = CoachRuntime(coach: Coach(text: text), store: .default, claude: claude)
+        let overlay = OverlayPanel(runtime: runtime)
+        overlay.orderFrontRegardless()
+        (self.runtime, self.overlay) = (runtime, overlay)
+        hotKey = HotKey(HotKey.default) { overlay.focusQuestionField() }
+        statusItem = makeStatusItem()
+        await runtime.start(watching: savesRoot)
+    }
+
+    private func makeStatusItem() -> NSStatusItem {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.image = NSImage(systemSymbolName: "suit.spade.fill", accessibilityDescription: "Balabro")
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Show overlay", action: #selector(showOverlay), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Balabro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        item.menu = menu
+        return item
+    }
+
+    @objc private func showOverlay() { overlay?.orderFrontRegardless() }
 }

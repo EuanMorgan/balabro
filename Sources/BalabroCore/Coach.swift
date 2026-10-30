@@ -331,4 +331,9 @@ public struct CoachView: Sendable, Equatable {
     public var queuedQuestion: String?
     public var problem: Problem?
     public var canRetry: Bool
+
+    public init(status: Status, headline: String, advice: Advice?, history: [Exchange], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        (self.status, self.headline, self.advice, self.history) = (status, headline, advice, history)
+        (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
+    }
 }

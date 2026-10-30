@@ -10,6 +10,10 @@ public struct Advice: Sendable, Equatable {
     public var lesson: Lesson?
     public var rest: String
 
+    public init(doNow: [String], why: [String], lesson: Lesson?, rest: String) {
+        (self.doNow, self.why, self.lesson, self.rest) = (doNow, why, lesson, rest)
+    }
+
     public struct Lesson: Sendable, Equatable {
         public var number: Int?
         public var title: String

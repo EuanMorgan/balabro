@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key><string>io.github.euanmorgan.balabro</string>
+	<key>CFBundleIdentifier</key><string>com.euanmorgan.balabro</string>
 	<key>CFBundleName</key><string>Balabro</string>
 	<key>CFBundleExecutable</key><string>Balabro</string>
 	<key>CFBundlePackageType</key><string>APPL</string>

@@ -1,6 +1,7 @@
 import BalabroCore
 import Foundation
 import Observation
+import os
 
 /// The only owner of `CoachState`. Feeds events into `Coach.reduce` and performs the effects.
 ///
@@ -40,17 +41,24 @@ final class CoachRuntime {
     private func perform(_ effect: CoachEffect) {
         switch effect {
         case .startTurn(let request):
-            // TODO: turns[request.id] = Task { for await out in ClaudeProcess.run(request, claude) { send(.turnOutput(id, out)) } }
-            //       claude == nil -> send(.turnOutput(id, .failed(.cliNotFound))) at once.
-            fatalError("not implemented")
+            guard let claude else {
+                send(.turnOutput(request.id, .failed(.cliNotFound)))
+                return
+            }
+            turns[request.id] = Task {
+                for await output in ClaudeProcess.run(request, with: claude) { send(.turnOutput(request.id, output)) }
+                turns[request.id] = nil
+            }
         case .cancelTurn(let id):
             turns.removeValue(forKey: id)?.cancel()
         case .captureGameWindow(let id, let delay):
-            // TODO: Task { try? await Task.sleep(for: delay); send(.screenshot(id, png: await GameWindow.capturePNG())) }
-            fatalError("not implemented")
+            Task {
+                try? await Task.sleep(for: delay)
+                send(.screenshot(id, png: await GameWindow.capturePNG()))
+            }
         case .save(let record):
-            // TODO: try store.save(record); log on failure. Synchronous: a few KB, and ordering must match state.
-            fatalError("not implemented")
+            // Synchronous: a few KB, and the file order must match the state order.
+            do { try store.save(record) } catch { Logger.balabro.error("Couldn't save run \(record.key, privacy: .public): \(error)") }
         }
     }
 }
