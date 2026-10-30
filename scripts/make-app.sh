@@ -16,9 +16,17 @@ cp "$bin/Balabro" "$app/Contents/MacOS/Balabro"
 sed "s/__VERSION__/$version/g" "$root/Packaging/Info.plist" > "$app/Contents/Info.plist"
 cp "$root/Packaging/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 
-# Ad-hoc, because there is no Developer ID. Gatekeeper blocks the download until the user clicks
-# Open Anyway in Privacy & Security, as the README explains.
-codesign --force --sign - --timestamp=none "$app"
+# There is no Developer ID, so Gatekeeper blocks the download until the user clicks Open Anyway in
+# Privacy & Security, as the README explains. Releases must use the certificate from
+# make-signing-identity.sh, or users lose Screen Recording on update. Ad-hoc is for other people's builds.
+signing="$HOME/.balabro-signing"
+if [ -f "$signing/signing.keychain-db" ]; then
+    security unlock-keychain -p "$(cat "$signing/password")" "$signing/signing.keychain-db"
+    identity="$(security find-certificate -c Balabro -Z "$signing/signing.keychain-db" | awk '/SHA-1/{print $3}')"
+    codesign --force --sign "$identity" --keychain "$signing/signing.keychain-db" --timestamp=none "$app"
+else
+    codesign --force --sign - --timestamp=none "$app"
+fi
 codesign --verify --strict "$app"
 
 # ditto keeps the signature's extended attributes, which `zip` drops.

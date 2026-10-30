@@ -113,7 +113,7 @@ Checked after synthesis. `--resume <head> --fork-session` keeps the prompt cache
 - We accept that cancelled turns still use some of the subscription in exchange for advice that never describes a board the player has already left.
 - We accept a full game state in every decision prompt, so the conversation grows by about 1 to 2 thousand tokens per decision, in exchange for prompts that don't depend on history and fingerprints that are exact. The CLI compacts the conversation once it gets long.
 - We accept a 1.8 s fixed wait before the pack screenshot in exchange for not tracking animation state.
-- We accept that ad-hoc signing makes macOS ask for Screen Recording again after each update in exchange for shipping without a Developer ID.
+- We accept a self-signed certificate, which keeps Screen Recording across updates but still needs Open Anyway on first launch, in exchange for shipping without a Developer ID.
 - We accept that a joker's text arrives as a template plus raw numbers in exchange for not copying `card.lua`'s per-joker code.
 
 ## Alternatives considered

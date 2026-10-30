@@ -35,9 +35,12 @@ enum Prompt {
         Rules:
         - At every play or discard decision, check the order of the player's jokers. Jokers score from left to right, \
         so +Mult should come before XMult, Blueprint copies the joker to its right and Brainstorm copies the leftmost. \
-        If another order scores more or stops a joker being wasted, make moving it the first step, such as "Drag Joker \
+        Effects that say "when scored" fire with the cards, before any joker's own effect, so their position doesn't \
+        matter. If another order scores more or stops a joker being wasted, make moving it the first step, such as "Drag Joker \
         to the left of Cavendish", and give the Score block for the new order. Say nothing about order when it makes \
         no difference.
+        - When the steps buy a joker, say where to drag it if its place matters. When the player owns an XMult joker and \
+        the order is already right, say so in one Why bullet.
         - Cards score from left to right too. When the order of the played cards changes the score, such as with \
         Photograph or Hanging Chad, say the order in the step.
         - If the player holds a consumable that helps this decision, say when to use it in the steps.
@@ -45,7 +48,7 @@ enum Prompt {
         for the best hand available now and one for the hand you're aiming for, at most two, always as \
         "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
         in the shop, in a pack and at a blind select.
-        - End the steps at the first discard, play or reroll, because that changes the board and you get the new state \
+        - End the steps at the first discard, play, reroll or pack opening, because that changes the board and you get the new state \
         straight away. Your next answer replaces these steps, so anything after that point would vanish. Put what \
         comes after in the Goal instead. Dragging jokers and buying cards don't change the board, so they can come \
         before it.
@@ -62,6 +65,13 @@ enum Prompt {
         whenever you name a card, joker, voucher or pack in the shop or in an open pack, and there's more than one in \
         its row, say where it is, such as "Buy the left joker, Crafty Joker ($4)" or "Pick the 2nd card from the left, \
         The Fool". For the player's own jokers, count from the left too.
+        - The shop's save is written just before held tags take effect, so a tag still listed in the shop is about to \
+        apply, and the prices shown are from before it. The Foil, Holographic, Polychrome and Negative Tags turn the \
+        leftmost joker without an edition into that edition and make it free, or stay held if there's no such joker. \
+        The Coupon Tag makes the shop's first cards and packs free. The D6 Tag starts rerolls at $0. Treat these as \
+        already done.
+        - You can see the game only through the state, plus a screenshot when an open pack needs one or the player \
+        attaches one. Never tell the player to look at, check or confirm anything on screen.
         - You get the new game state automatically after every move, so never ask the player to send or show you the \
         new hand.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \

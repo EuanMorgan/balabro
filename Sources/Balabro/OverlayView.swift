@@ -7,7 +7,7 @@ import SwiftUI
 /// ┌───────────────────────────────┐
 /// │ Ante 3 · Big Blind · hand 2  ●│  headline in the pixel font, status dot
 /// │ Score 92 / 300            $14 │  from the save
-/// │ Do this now                   │  chip-blue label
+/// │ Do this now    From your save │  chip-blue label, and what the coach could see
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
 /// │ 2 Play Q-Q-6-6                │
 /// │ Two Pair        [46] × [2] = 92 │  chip blue and mult red, as in the game
@@ -26,9 +26,9 @@ struct OverlayView: View {
     let updater: Updater?
 
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, update: updater?.status ?? .none) {
+        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, update: updater?.status ?? .none, install: {
             Task { if await updater?.install() == true { NSApp.terminate(nil) } }
-        }
+        }, screenAccess: ScreenAccess.isGranted)
     }
 }
 
@@ -38,6 +38,7 @@ struct OverlayContent: View {
     let retry: () -> Void
     var update = Updater.Status.none
     var install: () -> Void = {}
+    var screenAccess = true
     var showWhy = false
 
     var body: some View {
@@ -80,6 +81,10 @@ struct OverlayContent: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
             }
+            if !screenAccess {
+                NoticeRow(message: "Screen Recording is off, so the coach can't see packs") { ChipButton("Allow", action: ScreenAccess.ask) }
+                    .padding(.horizontal, 16)
+            }
             UpdateRow(status: update, install: install)
                 .padding(.horizontal, 16)
             QuestionField(onSubmit: ask)
@@ -92,7 +97,7 @@ struct OverlayContent: View {
     private static let contentID = "content"
 
     private func pinned(_ advice: Advice) -> some View {
-        DoThisNow(steps: advice.doNow, score: advice.score)
+        DoThisNow(steps: advice.doNow, score: advice.score, sawScreen: view.sawScreen)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
@@ -140,7 +145,7 @@ struct OverlayContent: View {
             }
         } else {
             if let kind = view.waitingOn {
-                WaitingView(kind: kind)
+                WaitingView(kind: kind, capturing: view.status == .lookingAtPack)
             } else {
                 placeholder
             }
@@ -234,21 +239,27 @@ private struct UpdateRow: View {
         case .none:
             EmptyView()
         case .available(let release):
-            row("Version \(release.version) is available") { ChipButton("Update", action: install) }
+            NoticeRow(message: "Version \(release.version) is available") { ChipButton("Update", action: install) }
         case .installing(let release):
-            row("Updating to \(release.version)…") { EmptyView() }
+            NoticeRow(message: "Updating to \(release.version)…") { EmptyView() }
         case .failed(let release):
-            row("Couldn't update") { ChipButton("Download") { NSWorkspace.shared.open(release.page) } }
+            NoticeRow(message: "Couldn't update") { ChipButton("Download") { NSWorkspace.shared.open(release.page) } }
         }
     }
+}
 
-    private func row(_ message: String, @ViewBuilder action: () -> some View) -> some View {
+private struct NoticeRow<Action: View>: View {
+    let message: String
+    @ViewBuilder let action: Action
+
+    var body: some View {
         HStack(spacing: 8) {
             Text(message)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            action()
+            action
         }
     }
 }
@@ -256,12 +267,19 @@ private struct UpdateRow: View {
 private struct DoThisNow: View {
     let steps: [String]
     let score: [Advice.ScoreLine]
+    let sawScreen: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Do this now")
-                .font(Theme.pixelFont(2))
-                .foregroundStyle(Theme.chips)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Do this now")
+                    .font(Theme.pixelFont(2))
+                    .foregroundStyle(Theme.chips)
+                Spacer(minLength: 0)
+                Label(sawScreen ? "Saw your screen" : "From your save", systemImage: sawScreen ? "camera.fill" : "doc.text")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 StepRow(number: index + 1, text: step)
             }
@@ -282,7 +300,10 @@ private struct FollowUpThread: View {
             Rectangle().fill(Theme.feltRaised).frame(height: 1)
             ForEach(Array(thread.enumerated()), id: \.offset) { index, followUp in
                 VStack(alignment: .leading, spacing: 6) {
-                    SuitText(followUp.question, size: 13, weight: .medium)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if followUp.sawScreen { Image(systemName: "camera.fill").font(.system(size: 10)) }
+                        SuitText(followUp.question, size: 13, weight: .medium)
+                    }
                         .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -476,7 +497,7 @@ private struct ProblemBanner: View {
         switch problem {
         case .noRun: "Start a run in Balatro first, then ask again."
         case .screenRecordingDenied:
-            "Allow Balabro in System Settings › Privacy & Security › Screen Recording so the coach can see pack cards."
+            "Couldn't take a screenshot of Balatro. Check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
         case .saveUnreadable: "Couldn't read Balatro's save file. Advice resumes at the next save."
         case .turnFailed(.notLoggedIn): "Claude isn't logged in. Run `claude` in Terminal and log in, then retry."
         case .turnFailed(.cliNotFound): "Couldn't find the claude command. Install Claude Code, then restart Balabro."

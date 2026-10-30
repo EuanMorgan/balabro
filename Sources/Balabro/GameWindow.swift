@@ -1,17 +1,28 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
 
+enum ScreenAccess {
+    static var isGranted: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// macOS only shows its own prompt the first time, so Settings opens as well.
+    static func ask() {
+        if !CGRequestScreenCaptureAccess(),
+           let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(settings)
+        }
+    }
+}
+
 /// Screenshot of the Balatro window, for the booster pack the save can't show.
 enum GameWindow {
     /// The largest on-screen window owned by `GameInstall.bundleID` (or titled "Balatro", which also
     /// covers the game run under plain LÖVE), downscaled so the long edge is at most 1568 px, as PNG.
     ///
-    /// Returns nil when Screen Recording isn't granted or Balatro has no window. The first call
-    /// triggers macOS's permission prompt. Ad-hoc signing means every new build counts as a new app
-    /// to TCC, so users re-grant after each update.
+    /// Returns nil when Screen Recording isn't granted or Balatro has no window.
     static func capturePNG() async -> Data? {
         guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true),
               let window = content.windows

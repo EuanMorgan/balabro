@@ -21,7 +21,7 @@ Balabro reads the save file the game already writes, so it needs no mods and cha
 3. Open `Balabro.app`. The app isn't notarised by Apple, so macOS blocks it the first time.
 4. Open **System Settings > Privacy & Security**, scroll to the message about Balabro, and click **Open Anyway**.
 
-To update, click **Update** when the panel says a new version is available. Balabro restarts and carries on with your run. macOS may ask for Screen Recording permission again afterwards. To update from a terminal instead, run `/Applications/Balabro.app/Contents/MacOS/Balabro --update`.
+To update, click **Update** when the panel says a new version is available. Balabro restarts and carries on with your run. To update from a terminal instead, run `/Applications/Balabro.app/Contents/MacOS/Balabro --update`.
 
 ## Play with it
 
@@ -29,7 +29,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 2. Drag the panel to a corner of the screen. It stays on top of Balatro, even in fullscreen, and remembers where you put it.
 3. Start or continue a run in Balatro. Advice appears a few seconds after each decision.
 4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. The reply appears under the steps, and the steps change if the answer changes what to do. Your questions clear at the next decision. Press **Escape** to go back to the game.
-5. The first time you open a pack, macOS asks for Screen Recording permission. Allow it, so the coach can see the cards. If you don't, the coach asks you to list them instead.
+5. To let the coach see the cards in a booster pack, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach asks you to list the cards instead. Above the steps, the panel says whether the coach used your screen or only your save.
 
 Balatro writes its save file at most every 5 seconds, so advice can arrive a few seconds after you act. If you make two moves quickly, the coach advises on where you ended up.
 
@@ -71,7 +71,7 @@ tools/driver/run.sh /tmp/balabro-saves &
 swift run Balabro --saves-root "$HOME/Library/Application Support/LOVE/balabro-driver-game"
 ```
 
-To build the app and its zip for a release, run `scripts/make-app.sh <version>`. The output is in `dist/`.
+To build the app and its zip for a release, run `scripts/make-app.sh <version>`. The output is in `dist/`. Run `scripts/make-signing-identity.sh` once first, so that users keep their Screen Recording permission across updates. Without it, the build is signed ad-hoc and each update loses the permission.
 
 ## Licence
 

@@ -5,11 +5,12 @@ import SwiftUI
 /// can't ship the game's art. Every frame is a pure function of `time`, so nothing can get stuck mid-animation.
 struct WaitingView: View {
     let kind: Decision.Kind
+    var capturing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-            WaitingFrame(kind: kind, time: context.date.timeIntervalSinceReferenceDate, moving: !reduceMotion)
+            WaitingFrame(kind: kind, time: context.date.timeIntervalSinceReferenceDate, moving: !reduceMotion, capturing: capturing)
         }
     }
 }
@@ -18,6 +19,7 @@ struct WaitingFrame: View {
     let kind: Decision.Kind
     let time: Double
     var moving = true
+    var capturing = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -42,6 +44,7 @@ struct WaitingFrame: View {
     }
 
     private var caption: String {
+        if capturing { return "Looking at your screen" }
         let captions = switch kind {
         case .playHand: ["Counting the chips", "Checking the odds", "Reading your hand"]
         case .shop: ["Browsing the shelves", "Counting your money", "Weighing up the jokers"]

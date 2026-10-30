@@ -339,6 +339,38 @@ struct CoachTests {
         }
     }
 
+    @Test func viewSaysWhetherTheCoachSawTheScreen() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Discard.", SessionID(rawValue: "S0"))))
+        #expect(!state.view.sawScreen)
+
+        _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        _ = coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("**Do this now:**\n1. Pick.", SessionID(rawValue: "S2"))))
+        #expect(state.view.sawScreen)
+    }
+
+    @Test func failedScreenshotDoesNotClaimTheCoachSawTheScreen() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: nil))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("**Do this now:**\n1. List them.", SessionID(rawValue: "S1"))))
+        #expect(!state.view.sawScreen)
+        #expect(state.view.problem == .screenRecordingDenied)
+    }
+
+    @Test func followUpSaysWhetherItsReplySawTheScreen() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Discard.", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .ask("what's this?", withScreenshot: true))
+        _ = coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("A joker.", SessionID(rawValue: "S2"))))
+        #expect(state.view.thread == [.init(question: "what's this?", reply: "A joker.", changedSteps: false, sawScreen: true)])
+        #expect(!state.view.sawScreen)
+    }
+
     @Test func roundEndSaysNothing() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)
