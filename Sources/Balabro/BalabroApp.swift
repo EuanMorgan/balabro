@@ -109,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem?
     private let updater = Updater()
+    private var gameText = GameText.missing
+    private var statsWindow: NSWindow?
 
     init(savesRoot: URL) { self.savesRoot = savesRoot }
 
@@ -119,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func launch() async {
         let game = GameInstall.find()
         let text = await game?.loadText() ?? .missing
+        gameText = text
         _ = await game?.registerFont()
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: Self.conversations)
 
@@ -137,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "suit.spade.fill", accessibilityDescription: "Balabro")
         let menu = NSMenu()
         menu.addItem(withTitle: "Show overlay", action: #selector(showOverlay), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Your stats", action: #selector(showStats), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Balabro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
@@ -144,4 +148,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showOverlay() { overlay?.orderFrontRegardless() }
+
+    @objc private func showStats() {
+        statsWindow?.close()
+        let window = makeStatsWindow(StatsData.load(savesRoot: savesRoot, store: .default), text: gameText)
+        statsWindow = window
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+    }
 }

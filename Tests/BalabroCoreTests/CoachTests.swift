@@ -182,7 +182,7 @@ struct CoachTests {
     @Test func deletedSaveEndsTheRun() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
-        #expect(coach.reduce(&state, .saveRemoved(profile: 1)) == [.cancelTurn(TurnID(0))])
+        #expect(actions(coach.reduce(&state, .saveRemoved(profile: 1))) == [.cancelTurn(TurnID(0))])
         #expect(state.view.status == .waitingForRun)
         #expect(coach.reduce(&state, .ask("hello?", withScreenshot: false)).isEmpty)
         #expect(state.view.problem == .noRun)
@@ -369,6 +369,42 @@ struct CoachTests {
         _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("A joker.", SessionID(rawValue: "S2"))))
         #expect(state.view.thread == [.init(question: "what's this?", reply: "A joker.", changedSteps: false, sawScreen: true)])
         #expect(!state.view.sawScreen)
+    }
+
+    func savedSummaries(_ effects: [CoachEffect]) -> [RunSummary?] {
+        effects.compactMap { if case .save(let record) = $0 { record.summary } else { nil } }
+    }
+
+    @Test func summaryFollowsTheRunAndKeepsThePeakMoney() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        var later = try snap("12-shop")
+        later.dollars = 10
+        let effects = coach.reduce(&state, .saveWritten(later))
+        let summary = try #require(savedSummaries(effects).last ?? nil)
+        #expect(summary.ante == 1)
+        #expect(summary.stake == 1)
+        #expect(summary.deck == CenterKey(rawValue: "b_red"))
+        #expect(summary.jokers == [CenterKey(rawValue: "j_gluttenous_joker")])
+        #expect(summary.peakDollars == 86)
+        #expect(summary.bestHand == 16)
+        #expect(!summary.won)
+        #expect(!summary.ended)
+    }
+
+    @Test func removingTheSaveMarksTheRunEnded() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        let summary = try #require(savedSummaries(coach.reduce(&state, .saveRemoved(profile: 1))).last ?? nil)
+        #expect(summary.ended)
+    }
+
+    @Test func recordSavedBeforeStatsStillLoads() throws {
+        let json = #"""
+            {"key":{"identity":{"profile":1,"seed":"S","deck":"b_red","stake":1},"replay":0},
+             "progress":{"round":1,"handsPlayed":0,"cardsDiscarded":0,"rerolls":0,"purchases":0},"transcript":[]}
+            """#
+        #expect(try JSONDecoder().decode(RunRecord.self, from: Data(json.utf8)).summary == nil)
     }
 
     @Test func roundEndSaysNothing() throws {

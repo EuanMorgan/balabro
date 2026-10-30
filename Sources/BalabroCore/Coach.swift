@@ -30,6 +30,7 @@ public struct Coach: Sendable {
             }
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
             record.progress = snapshot.progress
+            record.summary = RunSummary(snapshot, previous: record.summary)
             state.standing = CoachView.Standing(snapshot)
             if record != state.runs[key] {
                 state.runs[key] = record
@@ -51,7 +52,12 @@ public struct Coach: Sendable {
         // The game deletes save.jkr on game over and when a new run replaces it.
         case .saveRemoved(let profile):
             guard state.current?.identity.profile == profile else { return [] }
-            let effects = state.abandonActivity()
+            var effects = state.abandonActivity()
+            if let key = state.current, var record = state.runs[key], record.summary != nil {
+                record.summary?.ended = true
+                state.runs[key] = record
+                effects.append(.save(record))
+            }
             state.current = nil
             state.standing = nil
             return effects
@@ -314,6 +320,8 @@ public struct RunRecord: Sendable, Hashable, Codable {
     public var lastCoached: Fingerprint?
     /// Rebuilds the overlay's plan and follow-ups after a restart.
     public var transcript: [Exchange]
+    /// nil for runs from before stats were recorded.
+    public var summary: RunSummary?
 }
 
 public struct Exchange: Sendable, Hashable, Codable {

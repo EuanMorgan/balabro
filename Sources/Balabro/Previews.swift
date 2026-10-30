@@ -22,13 +22,16 @@ enum Previews {
             try? png.write(to: url)
             print(url.path)
         }
+        let stats = StatsView(data: StatsData.load(savesRoot: SaveWatcher.defaultRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing)
+        try? snapshot(stats, width: 520, height: 900)?.write(to: directory.appending(path: "stats.png"))
         return 0
     }
 
     /// Through a window rather than `ImageRenderer`, which draws AppKit-backed views (the scroll view,
     /// the text field) as placeholders.
-    private static func snapshot(_ content: some View, height: CGFloat) -> Data? {
-        let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 320, height: height), styleMask: .borderless, backing: .buffered, defer: false)
+    private static func snapshot(_ content: some View, width: CGFloat = 320, height: CGFloat) -> Data? {
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: width, height: height), styleMask: .borderless, backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.contentView = NSHostingView(rootView: content)

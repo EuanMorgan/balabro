@@ -25,6 +25,9 @@ public struct RunSnapshot: Sendable, Hashable, Codable {
     public var handSize: Int
     /// Score so far against `blind.target` this round.
     public var chipsScored: Double
+    /// Set once Ante 8 is beaten, and stays set through endless mode.
+    public var won: Bool
+    public var bestHandScore: Double
 
     /// Left to right, as on screen.
     public var hand: [HandCard]

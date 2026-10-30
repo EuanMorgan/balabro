@@ -10,8 +10,16 @@ public enum SaveFile {
     /// Throws `.incomplete` for a file the game's save thread is still writing. That is normal;
     /// the caller retries. Every other error means the format isn't what we expect.
     public static func decode(_ bytes: Data, profile: Int) throws(SaveFileError) -> RunSnapshot {
-        let text = bytes.starts(with: Data("return".utf8)) ? String(decoding: bytes, as: UTF8.self) : try inflateRaw(bytes)
-        return try RunSnapshot(lua: LuaLiteral.parse(text), profile: profile)
+        try RunSnapshot(lua: LuaLiteral.parse(text(of: bytes)), profile: profile)
+    }
+
+    /// Decodes `profile.jkr`, where the game keeps its all-time totals.
+    public static func decodeCareer(_ bytes: Data) throws(SaveFileError) -> CareerStats {
+        try CareerStats(lua: LuaLiteral.parse(text(of: bytes)))
+    }
+
+    private static func text(of bytes: Data) throws(SaveFileError) -> String {
+        bytes.starts(with: Data("return".utf8)) ? String(decoding: bytes, as: UTF8.self) : try inflateRaw(bytes)
     }
 }
 
@@ -77,6 +85,35 @@ private struct Node {
     }
 }
 
+extension CareerStats {
+    /// Lenient throughout: a missing total reads as 0, because no decision depends on it.
+    init(lua root: LuaValue) {
+        let root = Node(value: root, path: "")
+        let career = root.child("career_stats")
+        let best = root.child("high_scores")
+        func total(_ key: String) -> Int { career?.child(key)?.number.map { Int($0) } ?? 0 }
+        func high(_ key: String) -> Double { best?.child(key)?.child("amt")?.number ?? 0 }
+        func usage(_ key: String, name: (String, Node) -> String) -> [Count] {
+            guard let table = root.child(key)?.table else { return [] }
+            return table.named.keys.compactMap { key2 -> Count? in
+                guard let node = root.child(key)?.child(key2), let count = node.child("count")?.number else { return nil }
+                return Count(name: name(key2, node), count: Int(count))
+            }
+            .sorted { ($1.count, $0.name) < ($0.count, $1.name) }
+        }
+        wins = total("c_wins")
+        losses = total("c_losses")
+        rounds = total("c_rounds")
+        handsPlayed = total("c_hands_played")
+        bestHand = high("hand")
+        mostMoney = Int(high("most_money"))
+        furthestAnte = Int(high("furthest_ante"))
+        furthestRound = Int(high("furthest_round"))
+        hands = usage("hand_usage") { _, node in node.child("order")?.string ?? "" }.filter { !$0.name.isEmpty && $0.count > 0 }
+        jokers = usage("joker_usage") { key, _ in key }.filter { $0.count > 0 }
+    }
+}
+
 extension RunSnapshot {
     /// Maps the top-level save table (`cardAreas`, `tags`, `GAME`, `STATE`, `ACTION`, `BLIND`, `BACK`, `VERSION`).
     ///
@@ -111,6 +148,8 @@ extension RunSnapshot {
         handsLeft = try current.int("hands_left")
         discardsLeft = try current.int("discards_left")
         chipsScored = try game.double("chips")
+        won = game.child("won")?.bool ?? false
+        bestHandScore = scores.child("hand")?.child("amt")?.number ?? 0
         blind = try Self.blind(root.child("BLIND"))
         blindSelect = try Self.blindSelect(resets)
 

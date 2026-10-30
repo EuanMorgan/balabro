@@ -66,6 +66,8 @@ let effects = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard"
 
 **Scores.** The score so far, the target and your money come from the save, so they are exact. What a hand will score comes from Claude in a `**Score:**` block, because working it out in the app would mean reimplementing every joker. Those numbers are only as right as Claude's maths.
 
+**Stats.** All-time totals come from the game's `profile.jkr`, which goes back further than Balabro. The game forgets a run when it ends, so `RunRecord.summary` keeps one, updated on every save. A removed save also happens when a run is abandoned, so a summary says how far a run got and whether it won, not that it lost.
+
 **Updates.** `Updater` reads GitHub's release list at launch and every 6 hours, because `/releases/latest` leaves out pre-releases. A release counts only if it has `Balabro-<version>.zip` attached. Clicking **Update** downloads the zip, checks the bundle id, the version and the signature, swaps the app and reopens it once the old process has exited. Being offline shows nothing. A failed install offers the release page instead.
 
 **Booster packs.** A `.openPack` decision returns `.captureGameWindow(id, after: 1.8 s)` instead of starting a turn. The shell captures the largest Balatro window (bundle `com.Balatro.localthunk`) with ScreenCaptureKit, scales it so the long edge is at most 1568 px, and sends it back as `.screenshot(id, png:)`. The turn then carries the PNG as a base64 image block in the stream-json stdin line, so it needs no tool and no temp file. If Screen Recording is denied, the turn still runs, with text telling Claude to ask the player to list the cards, and the overlay shows a permission banner. A follow-up can also attach a screenshot.
