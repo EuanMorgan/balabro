@@ -69,8 +69,8 @@ enum Prompt {
         and from you. Never guess at either.
         - Jokers and vouchers have no name printed on them, and the game hides the name and text of any the player \
         hasn't discovered yet. So whenever you name a joker or voucher in the shop or in an open pack, and there's more \
-        than one card in its row, say where it is, such as "Buy the left joker, Crafty Joker ($4)". For the player's own \
-        jokers, count from the left too. Tarot, Planet and Spectral cards and packs have their names printed on them, \
+        than one card in its row, say where it is in brackets after its name, such as "Buy Crafty Joker (left, $4)" or \
+        "Take Baron (2nd from left)". For the player's own jokers, count from the left too. Tarot, Planet and Spectral cards and packs have their names printed on them, \
         and playing cards show their rank and suit, so just name those, such as "Take Mercury". Give their position only \
         when two in the row are the same.
         - The shop's save is written just before held tags take effect, so a tag still listed in the shop is about to \
