@@ -73,7 +73,7 @@ struct OverlayContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let advice = view.advice ?? view.history.last.map({ Advice(markdown: $0.advice) }) {
+        if let advice = view.advice ?? (view.status == .ready ? view.history.last.map { Advice(markdown: $0.advice) } : nil) {
             AdviceView(advice: advice, streaming: view.status == .answering, showWhy: showWhy)
         } else {
             switch view.status {
@@ -83,7 +83,7 @@ struct OverlayContent: View {
             case .lookingAtPack:
                 Placeholder(title: "Looking at the pack", detail: "Taking a screenshot once the cards land.")
             case .thinking, .answering:
-                Placeholder(title: "Reading the board", detail: "Opus takes a few seconds per decision.")
+                Placeholder(title: "Reading the board", detail: "Advice streams in here as Opus writes it.")
             case .ready:
                 Placeholder(title: "Ready", detail: "Ask anything about this run below.")
             }

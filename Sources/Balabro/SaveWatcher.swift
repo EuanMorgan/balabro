@@ -19,10 +19,18 @@ struct SaveWatcher: Sendable {
     func events() -> AsyncStream<CoachEvent> {
         let (changed, notify) = AsyncStream.makeStream(of: Int.self)
         Self.profiles.forEach { notify.yield($0) }
-        let stream = FileEvents(root: root) { paths in
-            for profile in Self.profiles where paths.contains(where: { $0.hasSuffix("/\(profile)/save.jkr") }) {
-                notify.yield(profile)
-            }
+        // FSEvents reports real paths (`/private/tmp`, which `resolvingSymlinksInPath` turns back into `/tmp`),
+        // and a missing root never reports its own creation, so a root missing at launch is watched from above.
+        let parent = root.deletingLastPathComponent()
+        let realParent = realpath(parent.path, nil).map { path in
+            defer { free(path) }
+            return URL(filePath: String(cString: path))
+        }
+        let root = (realParent ?? parent).appending(path: root.lastPathComponent)
+        let saves = Dictionary(uniqueKeysWithValues: Self.profiles.map { (root.appending(path: "\($0)/save.jkr").path, $0) })
+        let watched = FileManager.default.fileExists(atPath: root.path) ? root : root.deletingLastPathComponent()
+        let stream = FileEvents(watching: watched) { paths in
+            Set(paths.compactMap { saves[$0] }).sorted().forEach { notify.yield($0) }
         }
 
         return AsyncStream { continuation in
@@ -82,12 +90,10 @@ private final class FileEvents: Sendable {
     nonisolated(unsafe) private let stream: FSEventStreamRef
     private let queue = DispatchQueue(label: "com.euanmorgan.balabro.saves")
 
-    init(root: URL, onChange: @escaping @Sendable ([String]) -> Void) {
+    init(watching directory: URL, onChange: @escaping @Sendable ([String]) -> Void) {
         var context = FSEventStreamContext(
             version: 0, info: Unmanaged.passRetained(Context(onChange)).toOpaque(),
             retain: nil, release: { Unmanaged<Context>.fromOpaque($0!).release() }, copyDescription: nil)
-        // `/tmp` and friends are symlinks, and FSEvents reports resolved paths.
-        let path = root.resolvingSymlinksInPath().path
         stream = FSEventStreamCreate(
             nil,
             { _, info, count, paths, _, _ in
@@ -95,7 +101,7 @@ private final class FileEvents: Sendable {
                 let paths = Unmanaged<CFArray>.fromOpaque(paths).takeUnretainedValue() as! [String]
                 context.onChange(Array(paths.prefix(count)))
             },
-            &context, [path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.1,
+            &context, [directory.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.1,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagUseCFTypes)
         )!
         FSEventStreamSetDispatchQueue(stream, queue)

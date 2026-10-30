@@ -51,8 +51,18 @@ enum BalabroApp {
         }
         var state = CoachState(restoring: [])
         _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
-        print("Kind: \(decision.kind)\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
+        print("Kind: \(label(decision.kind))\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
         return 0
+    }
+
+    private static func label(_ kind: Decision.Kind) -> String {
+        switch kind {
+        case .playHand: "play hand"
+        case .shop: "shop"
+        case .blindSelect: "blind select"
+        case .openPack(let pack, .shop): "open \(pack.key) from the shop"
+        case .openPack(let pack, .skipTag(let tag)): "open \(pack.key) from \(tag.rawValue)"
+        }
     }
 
     private static func locateClaude() async -> Int32 {

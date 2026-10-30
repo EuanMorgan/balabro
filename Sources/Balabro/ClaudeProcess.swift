@@ -10,7 +10,7 @@ enum ClaudeProcess {
             let process = Process()
             process.executableURL = invocation.executable
             process.arguments = invocation.arguments(forkFrom: request.forkFrom)
-            process.environment = invocation.environment(inheriting: ProcessInfo.processInfo.environment)
+            process.environment = invocation.environment(inheriting: ClaudeLocator.userEnvironment)
             process.currentDirectoryURL = invocation.workingDirectory
             let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
             (process.standardInput, process.standardOutput, process.standardError) = (stdin, stdout, stderr)
@@ -92,19 +92,24 @@ enum ClaudeLocator {
 
     private static func works(_ invocation: ClaudeInvocation) async -> Bool {
         guard FileManager.default.isExecutableFile(atPath: invocation.executable.path) else { return false }
-        let env = invocation.environment(inheriting: ProcessInfo.processInfo.environment)
+        let env = invocation.environment(inheriting: userEnvironment)
         return await Command.run(invocation.executable, ["--version"], environment: env, timeout: .seconds(10))?.status == 0
+    }
+
+    /// The app's environment, plus the account basics a process started with an empty environment lacks.
+    static var userEnvironment: [String: String] {
+        let user = NSUserName()
+        let shell = getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
+        return ProcessInfo.processInfo.environment.merging(
+            ["HOME": FileManager.default.homeDirectoryForCurrentUser.path, "USER": user, "LOGNAME": user, "SHELL": shell]
+        ) { inherited, _ in inherited }
     }
 
     /// `-i` because `.zshrc` (where this user sets CLAUDE_CONFIG_DIR) only loads for interactive shells.
     /// The record separators fence off anything the shell's startup files print.
     private static func loginShell(workingDirectory: URL) async -> ClaudeInvocation? {
-        let env = ProcessInfo.processInfo.environment
-        let shell = env["SHELL"] ?? getpwuid(getuid()).flatMap { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let user = NSUserName()
-        let shellEnv = ["HOME": home, "USER": user, "LOGNAME": user, "SHELL": shell, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]
-            .merging(env) { _, inherited in inherited }
+        let shellEnv = userEnvironment.merging(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]) { inherited, _ in inherited }
+        let shell = shellEnv["SHELL"]!
         let script = #"printf "\x1e%s\x1e%s\x1e%s\x1e" "$(command -v claude)" "$CLAUDE_CONFIG_DIR" "$PATH""#
         guard let result = await Command.run(URL(filePath: shell), ["-l", "-i", "-c", script], environment: shellEnv, timeout: .seconds(5)) else { return nil }
         let fields = String(decoding: result.output, as: UTF8.self).split(separator: "\u{1e}", omittingEmptySubsequences: false)
