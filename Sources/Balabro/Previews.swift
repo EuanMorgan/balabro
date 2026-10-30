@@ -12,7 +12,7 @@ enum Previews {
         let states: [(String, CoachView, Bool, CGFloat, Updater.Status)] = [
             ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind · hand 1", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
-            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
+            ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", standing: .init(score: "0 / 450", dollars: 14), advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
             ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
             ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind · hand 1", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]
@@ -50,6 +50,10 @@ enum Previews {
             "Discard 7♠ 6♥ 5♠ 2♦.",
             "Keep K♥ K♣ 3♠ 3♦. Any King or 3 makes a Full House.",
             "Play the Full House if it lands, otherwise play K-K-3-3.",
+        ],
+        score: [
+            .init(label: "Two Pair", sum: .init(chips: "46", mult: "2", total: "92")),
+            .init(label: "Full House, if you draw it", sum: .init(chips: "79", mult: "4", total: "316")),
         ],
         why: [
             "Big Blind needs 450. Two Pair K-K-3-3 scores (20 + 26) × 2 = **92**.",

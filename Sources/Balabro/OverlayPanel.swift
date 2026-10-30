@@ -13,7 +13,7 @@ import SwiftUI
 @MainActor
 final class OverlayPanel: NSPanel {
     init(runtime: CoachRuntime, updater: Updater?) {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 320, height: 420),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 320, height: 500),
                    styleMask: [.borderless, .nonactivatingPanel, .resizable, .fullSizeContentView],
                    backing: .buffered, defer: false)
         level = .screenSaver

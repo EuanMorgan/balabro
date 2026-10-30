@@ -2,7 +2,7 @@
 
 # Balabro
 
-Balabro is a small macOS panel that sits over Balatro and coaches you through your run with Claude. Each time you draw a hand, visit the shop, open a pack or reach a blind select, it tells you what to do first, then why, then a short lesson.
+Balabro is a small macOS panel that sits over Balatro and coaches you through your run with Claude. Each time you draw a hand, visit the shop, open a pack or reach a blind select, it tells you what to do first and what the hand will score, then why, then a short lesson.
 
 ![The Balabro panel showing advice for a hand](docs/overlay.png)
 

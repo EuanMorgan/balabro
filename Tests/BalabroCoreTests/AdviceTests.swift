@@ -58,4 +58,34 @@ struct AdviceTests {
         #expect(a.why == ["Lessons from the last ante: keep Clubs."])
         #expect(a.lesson == nil)
     }
+
+    @Test func scoreBlockSplitsIntoChipsMultAndTotal() {
+        let a = Advice(markdown: """
+            **Do this now:**
+            1. Play K♥ K♣ 3♠ 3♦.
+
+            **Score:**
+            - Two Pair: 46 x 2 = 92
+            - Full House, if you draw it: 1,076 × 4.5 = 4,842.
+
+            **Why:**
+            - It beats the blind.
+            """)
+        #expect(a.doNow == ["Play K♥ K♣ 3♠ 3♦."])
+        #expect(a.score == [
+            .init(label: "Two Pair", sum: .init(chips: "46", mult: "2", total: "92")),
+            .init(label: "Full House, if you draw it", sum: .init(chips: "1,076", mult: "4.5", total: "4,842")),
+        ])
+        #expect(a.why == ["It beats the blind."])
+    }
+
+    @Test func scoreLineWhoseHandNameStartsWithANumberKeepsIt() {
+        let a = Advice(markdown: "**Score:**\n- 3 of a Kind: 30 x 3 = 90")
+        #expect(a.score == [.init(label: "3 of a Kind", sum: .init(chips: "30", mult: "3", total: "90"))])
+    }
+
+    @Test func scoreLineInAnotherFormStaysReadable() {
+        let a = Advice(markdown: "**Score:**\n- Pair: **about 60**")
+        #expect(a.score == [.init(label: "Pair: about 60")])
+    }
 }

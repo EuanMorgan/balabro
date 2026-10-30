@@ -30,6 +30,7 @@ public struct Coach: Sendable {
             }
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
             record.progress = snapshot.progress
+            state.standing = CoachView.Standing(snapshot)
             if record != state.runs[key] {
                 state.runs[key] = record
                 effects.append(.save(record))
@@ -52,6 +53,7 @@ public struct Coach: Sendable {
             guard state.current?.identity.profile == profile else { return [] }
             let effects = state.abandonActivity()
             state.current = nil
+            state.standing = nil
             return effects
 
         case .saveUnreadable(_, let error):
@@ -151,6 +153,7 @@ public struct CoachState: Sendable {
     var queuedQuestion: String?
     var retryable: Purpose?
     var problem: Problem?
+    var standing: CoachView.Standing?
     var nextID = 0
 
     /// Starts from what `RunStore` saved. No in-flight state survives a restart, by design.
@@ -169,7 +172,7 @@ public struct CoachState: Sendable {
         let canRetry = retryable != nil && activity.isIdle
         if let decision = activity.purpose?.decision {
             return CoachView(
-                status: status, headline: decision.title, advice: partial.isEmpty ? nil : Advice(markdown: partial), thread: [],
+                status: status, headline: decision.title, standing: standing, advice: partial.isEmpty ? nil : Advice(markdown: partial), thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
         let history = current.flatMap { runs[$0] }?.transcript ?? []
@@ -182,7 +185,7 @@ public struct CoachState: Sendable {
         return CoachView(
             status: status,
             headline: planIndex.map { history[$0].title } ?? (current == nil ? "Start or continue a run" : "Waiting for your next move"),
-            advice: plan, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
+            standing: standing, advice: plan, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
     }
 
     /// The decision this state last saw, so a duplicate write, or a reread after a restart, starts nothing.
@@ -344,6 +347,8 @@ public struct CoachView: Sendable, Equatable {
     }
     public var status: Status
     public var headline: String
+    /// Read from the newest save, so it's right even while Claude is still answering.
+    public var standing: Standing?
     /// The current plan, parsed even while partial so "Do this now" shows as soon as it streams.
     public var advice: Advice?
     /// The player's questions about the current decision. A new decision starts it empty.
@@ -352,9 +357,22 @@ public struct CoachView: Sendable, Equatable {
     public var problem: Problem?
     public var canRetry: Bool
 
-    public init(status: Status, headline: String, advice: Advice?, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
-        (self.status, self.headline, self.advice, self.thread) = (status, headline, advice, thread)
+    public init(status: Status, headline: String, standing: Standing? = nil, advice: Advice?, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        (self.status, self.headline, self.standing, self.advice, self.thread) = (status, headline, standing, advice, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
+    }
+
+    public struct Standing: Sendable, Equatable {
+        /// "92 / 300" during a hand, nil outside one.
+        public var score: String?
+        public var dollars: Int
+
+        public init(score: String?, dollars: Int) { (self.score, self.dollars) = (score, dollars) }
+
+        init(_ snapshot: RunSnapshot) {
+            let score = snapshot.blind.flatMap { snapshot.phase == .selectingHand ? "\(Prompt.chips(snapshot.chipsScored)) / \(Prompt.chips($0.target))" : nil }
+            self.init(score: score, dollars: snapshot.dollars)
+        }
     }
 
     public struct FollowUp: Sendable, Equatable {
@@ -366,13 +384,13 @@ public struct CoachView: Sendable, Equatable {
             (self.question, self.reply, self.changedSteps) = (question, reply, changedSteps)
         }
 
-        /// New steps replace the plan's and take its reasons with them, because the old reasons argue for the old steps.
+        /// New steps replace the plan's and take its score and reasons with them, because those belong to the old steps.
         init(question: String, answer: String, plan: inout Advice?) {
             let parsed = Advice(markdown: answer)
             let changedSteps = !parsed.doNow.isEmpty
             if changedSteps {
                 var updated = plan ?? Advice(doNow: [], why: [], lesson: nil, rest: "")
-                (updated.doNow, updated.why) = (parsed.doNow, parsed.why)
+                (updated.doNow, updated.score, updated.why) = (parsed.doNow, parsed.score, parsed.why)
                 plan = updated
             }
             if let lesson = parsed.lesson { plan?.lesson = lesson }

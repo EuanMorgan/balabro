@@ -14,6 +14,10 @@ enum Prompt {
         1. One concrete action per step, in the order the player does them.
         2. Name cards exactly as written in the state, such as "Discard 7♣ 4♣ 2♠" or "Buy Gluttonous Joker ($5)".
 
+        **Score:**
+        - Two Pair: 46 x 2 = 92
+        - Full House, if you draw it: 76 x 4 = 304
+
         **Why:**
         - At most four bullets, one line each, no nested bullets.
         - Show the score maths against the blind target, such as "Pair of Kings: (10 + 10 + 10) x 2 = 60".
@@ -25,6 +29,10 @@ enum Prompt {
         starting at 1, and never repeat one you already gave.
 
         Rules:
+        - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
+        for the best hand available now and one for the hand you're aiming for, at most two, always as \
+        "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
+        in the shop, in a pack and at a blind select.
         - Lead with the action. No preamble, no recap of the state, no closing summary.
         - At a blind select, the whole answer is one step and one bullet, unless the Boss Blind's rule or a skip tag \
         changes the plan.
@@ -40,7 +48,7 @@ enum Prompt {
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \
-        complete new steps, then a **Why:** block. These replace the steps on screen.
+        complete new steps, then a **Score:** block at a play or discard decision, then a **Why:** block. These replace the steps on screen.
         """
 
     static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
@@ -235,7 +243,7 @@ enum Prompt {
     private static func name(_ tag: TagKey, _ text: GameText) -> String { name(CenterKey(rawValue: tag.rawValue), text) }
 
     /// Matches the game's `number_format` (`misc_functions.lua:956`), so a score reads the same as on screen.
-    private static func chips(_ n: Double) -> String {
+    static func chips(_ n: Double) -> String {
         guard n.isFinite else { return "infinite" }
         guard n >= 1e11 else { return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))) }
         let exponent = Int(log10(n).rounded(.down))

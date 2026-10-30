@@ -282,6 +282,30 @@ struct CoachTests {
         #expect(!exchange.isQuestion)
     }
 
+    @Test func standingComesFromTheNewestSave() throws {
+        var state = CoachState(restoring: [])
+        #expect(state.view.standing == nil)
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        #expect(state.view.standing == .init(score: "0 / 300", dollars: 4))
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        #expect(state.view.standing == .init(score: nil, dollars: 4))
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        #expect(state.view.standing == .init(score: "0 / 450", dollars: 86))
+        _ = coach.reduce(&state, .saveRemoved(profile: 1))
+        #expect(state.view.standing == nil)
+    }
+
+    @Test func replyWithNewStepsDropsTheOldScore() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done(
+            "**Do this now:**\n1. Play K♥ K♣.\n\n**Score:**\n- Pair: 30 x 2 = 60", SessionID(rawValue: "S0"))))
+        #expect(state.view.advice?.score == [.init(label: "Pair", sum: .init(chips: "30", mult: "2", total: "60"))])
+        _ = coach.reduce(&state, .ask("discard instead?", withScreenshot: false))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("Yes.\n\n**Do this now:**\n1. Discard 7♠.", SessionID(rawValue: "S1"))))
+        #expect(state.view.advice?.score == [])
+    }
+
     @Test func roundEndSaysNothing() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)

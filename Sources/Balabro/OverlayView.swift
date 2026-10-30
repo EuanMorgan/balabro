@@ -6,9 +6,12 @@ import SwiftUI
 /// ```
 /// ┌───────────────────────────────┐
 /// │ Ante 3 · Big Blind · hand 2  ●│  headline in the pixel font, status dot
+/// │ Score 92 / 300            $14 │  from the save
 /// │ Do this now                   │  chip-blue label
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
-/// │ 2 Play Q-Q-6-6                │  stays put; everything below it scrolls
+/// │ 2 Play Q-Q-6-6                │
+/// │ Two Pair        [46] × [2] = 92 │  chip blue and mult red, as in the game
+/// │                               │  everything above stays put; everything below scrolls
 /// │ Why  ▸                        │  collapsed by default, one tap to open
 /// │ Lesson 12                     │  mult-red label
 /// │ Straights in the middle cards │  title, then the lesson in full
@@ -48,10 +51,13 @@ struct OverlayContent: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
-            if let steps = view.advice?.doNow, !steps.isEmpty {
-                DoThisNow(steps: steps)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
+            if let advice = view.advice, !advice.doNow.isEmpty {
+                // Scrolls only when the steps alone are too tall for the panel, so the question box stays on screen.
+                ViewThatFits(in: .vertical) {
+                    pinned(advice)
+                    ScrollView { pinned(advice) }.scrollIndicators(.never)
+                }
+                .layoutPriority(1)
             }
             ScrollViewReader { scroll in
                 ScrollView {
@@ -85,15 +91,40 @@ struct OverlayContent: View {
 
     private static let contentID = "content"
 
+    private func pinned(_ advice: Advice) -> some View {
+        DoThisNow(steps: advice.doNow, score: advice.score)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+    }
+
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(view.headline.isEmpty ? "Balabro" : view.headline)
-                .font(Theme.pixelFont(2))
-                .foregroundStyle(Theme.text)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            StatusLight(status: view.status)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(view.headline.isEmpty ? "Balabro" : view.headline)
+                    .font(Theme.pixelFont(2))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                StatusLight(status: view.status)
+            }
+            if let standing = view.standing {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let score = standing.score {
+                        Text("Score")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.muted)
+                        Text(score)
+                            .font(Theme.pixelFont(2))
+                            .foregroundStyle(Theme.text)
+                    }
+                    Spacer(minLength: 0)
+                    Text("$\(standing.dollars)")
+                        .font(Theme.pixelFont(2))
+                        .foregroundStyle(Theme.money)
+                }
+            }
         }
     }
 
@@ -218,6 +249,7 @@ private struct UpdateRow: View {
 
 private struct DoThisNow: View {
     let steps: [String]
+    let score: [Advice.ScoreLine]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -226,6 +258,9 @@ private struct DoThisNow: View {
                 .foregroundStyle(Theme.chips)
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 StepRow(number: index + 1, text: step)
+            }
+            ForEach(Array(score.enumerated()), id: \.offset) { _, line in
+                ScoreRow(line: line)
             }
         }
         .textSelection(.enabled)
@@ -298,6 +333,40 @@ struct QuestionField: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.feltDeep))
+    }
+}
+
+private struct ScoreRow: View {
+    let line: Advice.ScoreLine
+
+    var body: some View {
+        HStack(spacing: 6) {
+            SuitText(line.label, size: 13, weight: .medium)
+                .foregroundStyle(Theme.muted)
+            Spacer(minLength: 0)
+            if let sum = line.sum {
+                HStack(spacing: 4) {
+                    tile(sum.chips, ChipTile())
+                    symbol("×")
+                    tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
+                    symbol("=")
+                    Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(Theme.text)
+                }
+                .fixedSize()
+            }
+        }
+    }
+
+    private func tile(_ number: String, _ background: ChipTile) -> some View {
+        Text(number)
+            .font(Theme.pixelFont(2))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .background(background)
+    }
+
+    private func symbol(_ text: String) -> some View {
+        Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
     }
 }
 
@@ -426,11 +495,14 @@ private struct ChipButton: View {
 }
 
 private struct ChipTile: View {
+    var face = Theme.chips
+    var lip = Theme.chipsDeep
+
     var body: some View {
         RoundedRectangle(cornerRadius: 5)
-            .fill(Theme.chipsDeep)
+            .fill(lip)
             .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: 5).fill(Theme.chips).padding(.bottom, 2)
+                RoundedRectangle(cornerRadius: 5).fill(face).padding(.bottom, 2)
             }
     }
 }

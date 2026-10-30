@@ -1,17 +1,42 @@
 import Foundation
 
-/// Claude's answer split into the three blocks the overlay styles differently.
+/// Claude's answer split into the blocks the overlay styles differently.
 ///
 /// Parsing is lenient on purpose: a partial stream or an answer that ignores the format still renders,
 /// with whatever didn't match landing in `rest` as markdown.
 public struct Advice: Sendable, Equatable {
     public var doNow: [String]
+    public var score: [ScoreLine]
     public var why: [String]
     public var lesson: Lesson?
     public var rest: String
 
-    public init(doNow: [String], why: [String], lesson: Lesson?, rest: String) {
-        (self.doNow, self.why, self.lesson, self.rest) = (doNow, why, lesson, rest)
+    public init(doNow: [String], score: [ScoreLine] = [], why: [String], lesson: Lesson?, rest: String) {
+        (self.doNow, self.score, self.why, self.lesson, self.rest) = (doNow, score, why, lesson, rest)
+    }
+
+    /// What a hand scores, such as "Two Pair: 46 x 2 = 92". A line in any other form has only a `label`.
+    public struct ScoreLine: Sendable, Equatable {
+        public var label: String
+        public var sum: Sum?
+
+        public struct Sum: Sendable, Equatable {
+            public var chips: String
+            public var mult: String
+            public var total: String
+            public init(chips: String, mult: String, total: String) { (self.chips, self.mult, self.total) = (chips, mult, total) }
+        }
+
+        public init(label: String, sum: Sum? = nil) { (self.label, self.sum) = (label, sum) }
+
+        init(line: String) {
+            let text = line.replacing("**", with: "")
+            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+)\s*[x×]\s*([\d,.]+)\s*=\s*([\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
+                self.init(label: text)
+                return
+            }
+            self.init(label: String(match.1), sum: Sum(chips: String(match.2), mult: String(match.3), total: String(match.4)))
+        }
     }
 
     public struct Lesson: Sendable, Equatable {
@@ -21,10 +46,11 @@ public struct Advice: Sendable, Equatable {
         public init(number: Int?, title: String, body: String) { (self.number, self.title, self.body) = (number, title, body) }
     }
 
-    /// Splits on the `**Do this now:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
+    /// Splits on the `**Do this now:**`, `**Score:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
     /// bold optional). Numbered and bulleted lines become items; a half-streamed last line is kept as is.
     public init(markdown: String) {
-        (doNow, why, lesson) = ([], [], nil)
+        (doNow, score, why, lesson) = ([], [], [], nil)
+        var scoreLines: [String] = []
         var rest: [String] = []
         var section: Section?
         var lessonBody: [String] = []
@@ -38,15 +64,16 @@ public struct Advice: Sendable, Equatable {
                     lesson = Lesson(number: number, title: title, body: "")
                     lessonBody = []
                 }
-                if !remainder.isEmpty { Self.add(remainder, to: heading, doNow: &doNow, why: &why, lessonBody: &lessonBody) }
+                if !remainder.isEmpty { Self.add(remainder, to: heading, doNow: &doNow, score: &scoreLines, why: &why, lessonBody: &lessonBody) }
                 continue
             }
             guard let section else {
                 rest.append(String(rawLine))
                 continue
             }
-            if !line.isEmpty { Self.add(line, to: section, doNow: &doNow, why: &why, lessonBody: &lessonBody) }
+            if !line.isEmpty { Self.add(line, to: section, doNow: &doNow, score: &scoreLines, why: &why, lessonBody: &lessonBody) }
         }
+        score = scoreLines.map(ScoreLine.init(line:))
         if lesson != nil { lesson?.body = lessonBody.joined(separator: " ") }
         self.rest = rest.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -58,13 +85,16 @@ public struct Advice: Sendable, Equatable {
     }
 
     private enum Section {
-        case doNow, why
+        case doNow, score, why
         case lesson(number: Int?, title: String)
     }
 
-    private static func add(_ line: String, to section: Section, doNow: inout [String], why: inout [String], lessonBody: inout [String]) {
+    private static func add(
+        _ line: String, to section: Section, doNow: inout [String], score: inout [String], why: inout [String], lessonBody: inout [String]
+    ) {
         switch section {
         case .doNow: addItem(line, to: &doNow)
+        case .score: addItem(line, to: &score)
         case .why: addItem(line, to: &why)
         case .lesson: lessonBody.append(line)
         }
@@ -96,7 +126,7 @@ public struct Advice: Sendable, Equatable {
         return body.trimmingCharacters(in: .whitespaces)
     }
 
-    /// `**Do this now:**`, `## Why`, `Why:`, `Lesson 12: title`, and a bold heading cut off mid-stream such as `**Do this now:`.
+    /// `**Do this now:**`, `**Score:**`, `## Why`, `Why:`, `Lesson 12: title`, and a bold heading cut off mid-stream such as `**Do this now:`.
     /// Returns the text after the heading on the same line too, so `**Why:** because` keeps "because".
     private static func heading(_ line: String) -> (Section, remainder: String)? {
         var text = Substring(line.drop { $0 == "#" }).trimmingCharacters(in: .whitespaces)[...]
@@ -112,6 +142,7 @@ public struct Advice: Sendable, Equatable {
         let remainderText = remainder.trimmingCharacters(in: .whitespaces)
         switch label.lowercased() {
         case "do this now": return (.doNow, remainderText)
+        case "score": return (.score, remainderText)
         case "why": return (.why, remainderText)
         default: break
         }
