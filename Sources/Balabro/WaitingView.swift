@@ -24,13 +24,13 @@ struct WaitingFrame: View {
     var body: some View {
         VStack(spacing: 14) {
             animation
-                .frame(height: 76)
+                .frame(height: 92, alignment: .bottom)
             Text(caption)
                 .font(Theme.pixelFont(2))
                 .foregroundStyle(Theme.chips)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 18)
+        .padding(.top, 10)
     }
 
     @ViewBuilder private var animation: some View {
@@ -55,7 +55,7 @@ struct WaitingFrame: View {
     }
 }
 
-/// Blue chips times red mult, climbing like the game's score counter.
+/// Blue chips times red mult, climbing like the game's score counter until the tiles catch fire.
 private struct ScoreTally: View {
     let time: Double
 
@@ -64,20 +64,61 @@ private struct ScoreTally: View {
         let chips = 10 + Int(progress * 90)
         let mult = 1 + Int(progress * 8)
         let pulse = 1 + 0.06 * (1 - (progress * 8).truncatingRemainder(dividingBy: 1))
+        // Dies down just before the numbers reset, so the loop doesn't cut off a full flame.
+        let heat = min(1, max(0, (progress - 0.15) / 0.45)) * min(1, (1 - progress) / 0.08)
         HStack(spacing: 8) {
-            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep)
+            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep, tip: Color(hex: 0x9BDCFF), time: time, heat: heat)
             Text("×").font(.system(size: 20, weight: .heavy)).foregroundStyle(Theme.mult)
-            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep)
+            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep, tip: Theme.money, time: time + 40, heat: heat)
                 .scaleEffect(pulse)
         }
     }
 
-    private func tile(_ number: String, face: Color, lip: Color) -> some View {
+    private func tile(_ number: String, face: Color, lip: Color, tip: Color, time: Double, heat: Double) -> some View {
         Text(number)
             .font(Theme.pixelFont(3))
             .foregroundStyle(.white)
             .frame(width: 72, height: 44)
             .background(ChipTile(face: face, lip: lip))
+            .background(alignment: .bottom) {
+                PixelFlames(base: face, tip: tip, time: time, heat: heat)
+                    .frame(width: 88, height: 44 + PixelFlames.reach)
+            }
+    }
+}
+
+/// Columns of square pixels rising behind a tile. Three sine waves moving at different speeds keep the
+/// outline from looking like it repeats.
+private struct PixelFlames: View {
+    let base: Color
+    let tip: Color
+    let time: Double
+    let heat: Double
+    static let reach = 42.0
+    private static let pixel = 3.0
+
+    var body: some View {
+        Canvas { context, size in
+            guard heat > 0 else { return }
+            let columns = Int(size.width / Self.pixel)
+            for column in 0..<columns {
+                let x = Double(column)
+                let slow: Double = 0.4 * sin(x * 0.23 + time * 3.1)
+                let fast: Double = 0.6 * sin(x * 1.3 - time * 7.3)
+                let wave: Double = sin(x * 0.55 + time * 5) + fast + slow
+                let flicker: Double = pow((wave + 2) / 4, 1.3)
+                let taper: Double = pow(sin((x + 0.5) / Double(columns) * .pi), 0.7)
+                let height: Double = heat * taper * (0.25 + 0.75 * flicker) * Self.reach
+                let rows = Int(height / Self.pixel + 0.5)
+                for row in 0..<max(rows, 0) {
+                    let rise = Double(row + 1) / Double(max(rows, 1))
+                    let colour = rise < 0.5 ? base : tip
+                    let rect = CGRect(x: x * Self.pixel, y: size.height - 41 - Double(row + 1) * Self.pixel, width: Self.pixel, height: Self.pixel)
+                    context.fill(Path(rect), with: .color(colour.opacity(1 - 0.55 * rise)))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
