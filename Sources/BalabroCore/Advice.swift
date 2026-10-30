@@ -66,7 +66,6 @@ public struct Advice: Sendable, Equatable {
         }
     }
 
-    /// A line with a list marker starts an item; a line without one continues the item above it.
     private static func addItem(_ line: String, to items: inout [String]) {
         if let item = listItem(line) {
             items.append(item)

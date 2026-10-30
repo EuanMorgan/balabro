@@ -40,19 +40,14 @@ public struct Coach: Sendable {
             }
             guard let decision = Decision.detect(in: snapshot, text: text),
                   decision.fingerprint != state.newestFingerprint else { return effects }
-            switch state.activity {
-            case .running(let turn) where turn.purpose.isQuestion:
+            if state.activity.purpose?.isQuestion == true {
                 state.waitingDecision = decision
-            case .capturing(_, let purpose) where purpose.isQuestion:
-                state.waitingDecision = decision
-            case .running(let turn):
-                effects.append(.cancelTurn(turn.id))
-                effects += begin(.decision(decision), &state)
-            case .capturing, .idle:
-                effects += begin(.decision(decision), &state)
+                return effects
             }
-            return effects
+            if case .running(let turn) = state.activity { effects.append(.cancelTurn(turn.id)) }
+            return effects + begin(.decision(decision), &state)
 
+        // The game deletes save.jkr on game over and when a new run replaces it.
         case .saveRemoved(let profile):
             guard state.current?.identity.profile == profile else { return [] }
             let effects = state.abandonActivity()
@@ -95,6 +90,7 @@ public struct Coach: Sendable {
                 state.runs[key] = record
                 state.activity = .idle
                 return [.save(record)] + startNext(&state)
+            // No automatic retry, and nothing queued starts: "not logged in" would fail again at once.
             case .failed(let failure):
                 state.problem = .turnFailed(failure)
                 state.retryable = turn.purpose
@@ -183,7 +179,7 @@ public struct CoachState: Sendable {
 
     /// The decision this state last saw, so a duplicate write, or a reread after a restart, starts nothing.
     var newestFingerprint: Fingerprint? {
-        activity.decision?.fingerprint ?? waitingDecision?.fingerprint ?? retryable?.decision?.fingerprint
+        activity.purpose?.decision?.fingerprint ?? waitingDecision?.fingerprint ?? retryable?.decision?.fingerprint
             ?? current.flatMap { runs[$0] }?.lastCoached
     }
 
@@ -215,13 +211,13 @@ public struct CoachState: Sendable {
         case capturing(CaptureID, Purpose)
         case running(Turn)
 
-        var isIdle: Bool { if case .idle = self { true } else { false } }
+        var isIdle: Bool { purpose == nil }
 
-        var decision: Decision? {
+        var purpose: Purpose? {
             switch self {
             case .idle: nil
-            case .capturing(_, let purpose): purpose.decision
-            case .running(let turn): turn.purpose.decision
+            case .capturing(_, let purpose): purpose
+            case .running(let turn): turn.purpose
             }
         }
     }

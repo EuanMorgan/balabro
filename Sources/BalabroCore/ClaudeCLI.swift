@@ -118,8 +118,8 @@ public struct StreamDecoder: Sendable {
         return .failed(.exited(status: status, stderrTail: String(stderr.suffix(400))))
     }
 
-    /// The CLI reports usage limits as an error result such as `Claude AI usage limit reached|1760000000`,
-    /// where the number is when the limit resets.
+    /// Earlier CLIs reported usage limits as `Claude AI usage limit reached|<reset epoch>`. No 2.1.312 recording
+    /// has a limit in it yet, so any error mentioning a limit counts, with the reset time when it parses.
     private static func failure(fromResult text: String) -> TurnFailure {
         if text.contains("Not logged in") { return .notLoggedIn }
         if text.lowercased().contains("limit") {

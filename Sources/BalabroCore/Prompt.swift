@@ -228,9 +228,11 @@ enum Prompt {
     private static func name(_ key: CenterKey, _ text: GameText) -> String { text[key]?.name ?? key.rawValue }
     private static func name(_ tag: TagKey, _ text: GameText) -> String { name(CenterKey(rawValue: tag.rawValue), text) }
 
-    /// Scores pass a trillion late in a run; past that, exponent form is what the game shows too.
+    /// Matches the game's `number_format` (`misc_functions.lua:956`), so a score reads the same as on screen.
     private static func chips(_ n: Double) -> String {
-        guard n.isFinite, abs(n) < 1e12 else { return n.isFinite ? String(format: "%.3e", n) : "infinite" }
-        return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US")))
+        guard n.isFinite else { return "infinite" }
+        guard n >= 1e11 else { return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))) }
+        let exponent = Int(log10(n).rounded(.down))
+        return String(format: "%.3fe%d", n / pow(10, Double(exponent)), exponent)
     }
 }
