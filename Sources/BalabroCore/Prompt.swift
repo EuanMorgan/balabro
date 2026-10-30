@@ -45,6 +45,10 @@ enum Prompt {
         for the best hand available now and one for the hand you're aiming for, at most two, always as \
         "hand: chips x mult = total", with chips and mult after every card and joker that scores. Leave the block out \
         in the shop, in a pack and at a blind select.
+        - End the steps at the first discard, play or reroll, because that changes the board and you get the new state \
+        straight away. Your next answer replaces these steps, so anything after that point would vanish. Put what \
+        comes after in the Goal instead. Dragging jokers and buying cards don't change the board, so they can come \
+        before it.
         - Lead with the action. No preamble, no recap of the state, no closing summary.
         - At a blind select, the whole answer is one step, the Goal and one bullet, unless the Boss Blind's rule or a skip tag \
         changes the plan.
