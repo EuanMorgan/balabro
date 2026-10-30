@@ -490,7 +490,12 @@ private struct SuitText: View {
             ?? AttributedString(markdown)
         for (glyphs, color) in [("♥♦♡♢", Theme.mult), ("♠♣♤♧", Theme.chips)] {
             for run in text.characters.indices where glyphs.contains(text.characters[run]) {
-                text[run..<text.characters.index(after: run)].foregroundColor = color
+                let next = text.characters.index(after: run)
+                text[run..<next].foregroundColor = color
+                // A normal space leaves one card's suit touching the next card's rank.
+                if next < text.characters.endIndex, text.characters[next] == " " {
+                    text[next..<text.characters.index(after: next)].kern = size * 0.45
+                }
             }
         }
         (attributed, self.size, self.weight) = (text, size, weight)
