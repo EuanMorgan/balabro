@@ -5,6 +5,10 @@ import Foundation
 /// files by hand or off the in-game screenshot the driver took, never recomputed by the code under test.
 enum Fixture {
     static func save(_ name: String) -> Data { data("saves/\(name).jkr") }
+    /// The save's Lua text, for tests that change one key of a real save to reach a state the driver didn't.
+    static func saveText(_ name: String) -> String {
+        String(decoding: try! (save(name) as NSData).decompressed(using: .zlib) as Data, as: UTF8.self)
+    }
     static func stream(_ name: String) -> [Data] {
         data("claude-stream/\(name).jsonl").split(separator: UInt8(ascii: "\n")).map { Data($0) }
     }

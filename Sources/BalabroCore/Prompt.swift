@@ -1,56 +1,230 @@
 import Foundation
 
 /// Everything Claude is told. Plain text, deterministic for a given snapshot (sorted keys, fixed order),
-/// because `Decision.fingerprint` hashes it.
+/// because `Decision.fingerprint` hashes it. Nothing goes in that changes without the decision changing.
 enum Prompt {
     /// Passed with `--system-prompt` on every turn. Replaces Claude Code's coding prompt entirely.
     static let system = """
-        You are a Balatro coach watching the player's run through their save file. Each message is the
-        current game state at one decision, or a question from the player.
+        You are a Balatro coach sitting beside the player. You see their run through the game's save file. \
+        Each message is either the game state at a decision, or a question from the player.
 
-        Always answer in this exact shape:
+        Answer every decision in this exact shape, and keep it short enough to read at a glance:
 
         **Do this now:**
-        1. One concrete action per step. Name cards exactly as given, e.g. "Discard 7♣ 4♣ 2♠".
+        1. One concrete action per step, in the order the player does them.
+        2. Name cards exactly as written in the state, such as "Discard 7♣ 4♣ 2♠" or "Buy Gluttonous Joker ($5)".
 
         **Why:**
-        - Short bullets. Show score maths against the blind target. Count outs when drawing matters.
-        - Mention joker order or card order when it changes the score.
+        - Two to four short bullets.
+        - Show the score maths against the blind target, such as "Pair of Kings: (10 + 10 + 10) x 2 = 60".
+        - Count outs when a draw matters, such as "9 Clubs left in 39 cards".
+        - Say when joker order or card order changes the score.
 
-        **Lesson N: title** (optional; only when there's a real lesson; number lessons across the whole run)
-        One or two sentences.
+        **Lesson N: short title**
+        One or two sentences. Add a lesson only when there is a real one. Number lessons across the whole run, \
+        starting at 1, and never repeat one you already gave.
 
-        Keep a running plan for the run and refer back to it. At a blind select, answer in one line
-        unless the Boss Blind's rule or a skip tag matters. Joker text has #1#-style placeholders:
-        fill them from the joker's live values. Face-down cards are unknown to the player and to you.
-        The deck is listed as counts because the draw order is unknown. Never guess at it.
-        If a booster pack's cards are not shown or the screenshot is missing, ask the player to list them.
+        Rules:
+        - Lead with the action. No preamble, no recap of the state, no closing summary.
+        - At a blind select, the whole answer is one step and one bullet, unless the Boss Blind's rule or a skip tag \
+        changes the plan.
+        - Keep a running plan for the run (the hand type to build, the jokers to look for) and say when it changes.
+        - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
+        - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
+        and from you. Never guess at either.
+        - If a booster pack's cards are not in the screenshot, or there is no screenshot, ask the player to list them.
+        - When the player asks a question, answer it directly in the same shape. If the answer changes what to do, \
+        the steps come first.
         """
 
-    /// Example (`.playHand`), the shape every decision prompt follows:
-    /// ```
-    /// DECISION: play or discard
-    /// Ante 3, Big Blind (target 2,400). Scored 830. Hands 3, discards 2. $14.
-    /// Hand (left to right): K♠ Q♥ Q♦ 9♣ 6♥ 6♠ 4♦ 2♣
-    /// Jokers (left to right, 4/5):
-    /// - Flower Pot: X#1# Mult if poker hand contains a Diamond card, Club card, Heart card, and Spade card. [extra=3]
-    /// Consumables (1/2): The Hermit
-    /// Poker hands: Pair L2 (15 x 3), Two Pair L3 (40 x 4), ...
-    /// Deck (34 left): A♠ x2, K♠, ...
-    /// ```
     static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
-        // TODO: one section per field, each sorted or in on-screen order. No timestamps, no counters
-        //       that change without the decision changing, or the fingerprint stops dropping duplicates.
-        fatalError("not implemented")
+        var lines: [String] = []
+        switch kind {
+        case .playHand:
+            lines.append("DECISION: play or discard")
+            lines.append(roundLine(s, text))
+            lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " "))
+        case .shop:
+            lines.append("DECISION: shop")
+            lines.append("Ante \(s.ante). $\(s.dollars).")
+            lines += shopLines(s, text)
+            lines += blindsLines(s, text)
+        case .blindSelect:
+            lines.append("DECISION: play or skip the next blind")
+            lines.append("Ante \(s.ante). $\(s.dollars).")
+            lines += blindsLines(s, text)
+        case .openPack(let pack, let source):
+            lines.append("DECISION: pick from a \(packName(pack)) (\(pack.cardsShown) cards, choose \(pack.picks))")
+            switch source {
+            case .shop: lines.append("Bought in the shop. The cards are in the attached screenshot of the game.")
+            case .skipTag(let tag):
+                lines.append("Opened by the \(name(tag, text)) from skipping a blind. The cards are in the attached screenshot of the game.")
+            }
+            lines.append("Ante \(s.ante). $\(s.dollars).")
+            if !s.hand.isEmpty { lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " ")) }
+        }
+        lines += jokerLines(s, text)
+        lines.append("Consumables (\(s.consumables.count)/\(s.consumableSlots)): "
+            + (s.consumables.isEmpty ? "none" : s.consumables.map { describe($0.key, edition: $0.edition, text) }.joined(separator: "; ")))
+        if !s.tags.isEmpty { lines.append("Skip tags held: " + s.tags.map { name($0, text) }.joined(separator: ", ")) }
+        if !s.vouchers.isEmpty { lines.append("Vouchers redeemed: " + s.vouchers.map { name($0, text) }.joined(separator: ", ")) }
+        lines.append("Poker hands: " + s.pokerHands.map(pokerHand).joined(separator: ", "))
+        lines.append(deckLine(s.deck))
+        return lines.joined(separator: "\n")
     }
 
-    static func question(_ q: String, packContentsUnknown: Bool) -> String { fatalError("not implemented") }
+    static func question(_ q: String, packContentsUnknown: Bool) -> String {
+        var text = "PLAYER QUESTION: \(q)"
+        if packContentsUnknown { text += "\n" + screenshotMissing }
+        return text
+    }
 
-    /// "Ante 3 · Big Blind · hand 2". The overlay's headline and the transcript title.
-    static func title(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String { fatalError("not implemented") }
+    static let screenshotMissing = """
+        The screenshot of the game could not be taken, so you can't see the screen. \
+        If the answer depends on cards the state doesn't list, such as a booster pack's contents, ask the player to list them.
+        """
+
+    /// "Ante 3 · Big Blind · 3 hands, 2 discards". The overlay's headline and the transcript title.
+    static func title(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
+        let detail = switch kind {
+        case .playHand: "\(s.blind.map { name($0.key, text) } ?? "Blind") · \(s.handsLeft) hands, \(s.discardsLeft) discards"
+        case .shop: "Shop"
+        case .blindSelect: "Blind select"
+        case .openPack(let pack, _): packName(pack)
+        }
+        return "Ante \(s.ante) · \(detail)"
+    }
 
     static func card(_ c: HandCard) -> String {
-        // TODO: "Q♥", "10♠ (Glass, Red seal)", "face-down".
-        fatalError("not implemented")
+        guard case .faceUp(let p) = c else { return "face-down" }
+        let details = cardDetails(p)
+        return rank(p.rank) + String(p.suit.symbol) + (details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")
+    }
+
+    private static func cardDetails(_ p: PlayingCard) -> [String] {
+        var details: [String] = []
+        if let e = p.edition { details.append(e.rawValue.capitalized) }
+        if let e = p.enhancement { details.append(enhancementNames[e]!) }
+        if let seal = p.seal { details.append("\(seal.rawValue) seal") }
+        if p.bonusChips > 0 { details.append("+\(p.bonusChips) chips") }
+        if p.debuffed { details.append("debuffed") }
+        return details
+    }
+
+    private static let enhancementNames: [Enhancement: String] = [
+        .bonus: "Bonus", .mult: "Mult", .wild: "Wild", .glass: "Glass", .steel: "Steel", .stone: "Stone", .gold: "Gold", .lucky: "Lucky",
+    ]
+
+    private static func rank(_ r: Rank) -> String {
+        switch r {
+        case .jack: "J"
+        case .queen: "Q"
+        case .king: "K"
+        case .ace: "A"
+        default: r.rawValue
+        }
+    }
+
+    private static func roundLine(_ s: RunSnapshot, _ text: GameText) -> String {
+        guard let blind = s.blind else {
+            return "Ante \(s.ante). Hands \(s.handsLeft), discards \(s.discardsLeft). $\(s.dollars)."
+        }
+        var line = "Ante \(s.ante), \(name(blind.key, text))"
+        if blind.isBoss, let rule = text[blind.key]?.text, !rule.isEmpty { line += " (\(rule.joined(separator: " ")))" }
+        line += ". Target \(chips(blind.target)), scored \(chips(s.chipsScored)). Hands \(s.handsLeft), discards \(s.discardsLeft). $\(s.dollars)."
+        line += " Hand size \(s.handSize)."
+        return line
+    }
+
+    private static func blindsLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
+        let b = s.blindSelect
+        func skip(_ tag: TagKey?) -> String {
+            guard let tag else { return "" }
+            let reward = text[CenterKey(rawValue: tag.rawValue)]?.text.joined(separator: " ") ?? ""
+            return ". Skip reward: \(name(tag, text))" + (reward.isEmpty ? "" : ", \(reward)")
+        }
+        let bossRule = text[b.bossKey]?.text.joined(separator: " ") ?? ""
+        return [
+            "Small Blind: \(b.small.rawValue)\(b.small == .select || b.small == .upcoming ? skip(b.smallSkipTag) : "")",
+            "Big Blind: \(b.big.rawValue)\(b.big == .select || b.big == .upcoming ? skip(b.bigSkipTag) : "")",
+            "Boss Blind: \(b.boss.rawValue). \(name(b.bossKey, text))" + (bossRule.isEmpty ? "" : ": \(bossRule)"),
+        ]
+    }
+
+    private static func shopLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
+        guard let shop = s.shop else { return [] }
+        var lines = ["Shop (reroll $\(shop.rerollCost)):"]
+        for item in shop.cards + shop.vouchers + shop.boosters {
+            let description: String = switch item.card {
+            case .joker(let j): "Joker: " + joker(j, text)
+            case .consumable(let c): describe(c.key, edition: c.edition, text)
+            case .playingCard(let p): "Playing card: " + card(.faceUp(p))
+            case .voucher(let key): "Voucher: " + describe(key, edition: nil, text)
+            case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
+            }
+            lines.append("- $\(item.cost) \(description)")
+        }
+        return lines
+    }
+
+    private static func jokerLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
+        let header = "Jokers (left to right, \(s.jokers.count)/\(s.jokerSlots)):"
+        return s.jokers.isEmpty ? [header + " none"] : [header] + s.jokers.map { "- " + joker($0, text) }
+    }
+
+    private static func joker(_ j: Joker, _ text: GameText) -> String {
+        var tags: [String] = []
+        if let e = j.edition { tags.append(e.rawValue.capitalized) }
+        tags += j.stickers.map(\.rawValue.capitalized).sorted()
+        if j.debuffed { tags.append("debuffed") }
+        var line = name(j.key, text) + (tags.isEmpty ? "" : " (\(tags.joined(separator: ", ")))")
+        if let template = text[j.key]?.text, !template.isEmpty { line += ": " + template.joined(separator: " ") }
+        if !j.liveValues.isEmpty {
+            line += " [" + j.liveValues.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", ") + "]"
+        }
+        return line + " Sells for $\(j.sellValue)."
+    }
+
+    private static func describe(_ key: CenterKey, edition: Edition?, _ text: GameText) -> String {
+        var line = name(key, text) + (edition.map { " (\($0.rawValue.capitalized))" } ?? "")
+        if let template = text[key]?.text, !template.isEmpty { line += ": " + template.joined(separator: " ") }
+        return line
+    }
+
+    private static func pokerHand(_ h: PokerHandLevel) -> String {
+        "\(h.name) L\(h.level) (\(h.chips) x \(h.mult)" + (h.timesPlayed > 0 ? ", played \(h.timesPlayed)" : "") + ")"
+    }
+
+    /// "Deck (44 left): ♠ A K Q J 10 9 8 4 2 | ♥ ...". Grouped by suit, highest rank first.
+    private static func deckLine(_ deck: DeckComposition) -> String {
+        let groups = Suit.allCases.compactMap { suit -> String? in
+            let entries = deck.cards.filter { $0.key.suit == suit }
+                .map { (order: Rank.allCases.firstIndex(of: $0.key.rank)!, text: deckEntry($0.key, count: $0.value)) }
+                .sorted { ($1.order, $0.text) < ($0.order, $1.text) }
+                .map(\.text)
+            guard !entries.isEmpty else { return nil }
+            return "\(suit.symbol) " + entries.joined(separator: " ")
+        }
+        return "Deck (\(deck.total) left): " + groups.joined(separator: " | ")
+    }
+
+    private static func deckEntry(_ p: PlayingCard, count: Int) -> String {
+        let details = cardDetails(p)
+        return rank(p.rank) + (details.isEmpty ? "" : "(\(details.joined(separator: ", ")))") + (count > 1 ? " x\(count)" : "")
+    }
+
+    static func packName(_ pack: BoosterPack) -> String {
+        let kind = pack.kind.rawValue.capitalized
+        let size = pack.key.rawValue.contains("_mega_") ? "Mega " : pack.key.rawValue.contains("_jumbo_") ? "Jumbo " : ""
+        return "\(size)\(kind) Pack"
+    }
+
+    private static func name(_ key: CenterKey, _ text: GameText) -> String { text[key]?.name ?? key.rawValue }
+    private static func name(_ tag: TagKey, _ text: GameText) -> String { name(CenterKey(rawValue: tag.rawValue), text) }
+
+    /// Scores pass a trillion late in a run; past that, exponent form is what the game shows too.
+    private static func chips(_ n: Double) -> String {
+        guard n.isFinite, abs(n) < 1e12 else { return n.isFinite ? String(format: "%.3e", n) : "infinite" }
+        return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US")))
     }
 }

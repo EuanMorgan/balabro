@@ -85,8 +85,7 @@ struct SaveFileTests {
     }
 
     @Test func missingKeyNamesItsPath() throws {
-        let text = String(decoding: try (Fixture.save("02-hand") as NSData).decompressed(using: .zlib) as Data, as: UTF8.self)
-        let broken = text.replacingOccurrences(of: #"["hands_left"]=4,"#, with: "")
+        let broken = Fixture.saveText("02-hand").replacingOccurrences(of: #"["hands_left"]=4,"#, with: "")
         #expect(throws: SaveFileError.unexpectedShape(path: "GAME.current_round.hands_left")) {
             try SaveFile.decode(Data(broken.utf8), profile: 1)
         }
