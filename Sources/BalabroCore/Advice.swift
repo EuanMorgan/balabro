@@ -28,18 +28,25 @@ public struct Advice: Sendable, Equatable {
             public var chips: String
             public var mult: String
             public var total: String
-            public init(chips: String, mult: String, total: String) { (self.chips, self.mult, self.total) = (chips, mult, total) }
+            /// The total rests on chance, such as Misprint's random mult, so it's an average.
+            public var isEstimate: Bool
+            public init(chips: String, mult: String, total: String, isEstimate: Bool = false) {
+                (self.chips, self.mult, self.total, self.isEstimate) = (chips, mult, total, isEstimate)
+            }
         }
 
         public enum Outcome: Sendable, Equatable {
             case clears
+            case clearsOnAverage
             case leaves(String)
+            case leavesAbout(String)
         }
 
         /// What this hand does to the blind, given the score still needed. nil when the total isn't a number.
         public func outcome(chipsNeeded: Double) -> Outcome? {
-            guard let total = sum.flatMap({ $0.total == "naneinf" ? .infinity : Double($0.total.replacing(",", with: "")) }) else { return nil }
-            return total >= chipsNeeded ? .clears : .leaves(Prompt.chips(chipsNeeded - total))
+            guard let sum, let total = sum.total == "naneinf" ? .infinity : Double(sum.total.replacing(",", with: "")) else { return nil }
+            let left = Prompt.chips(chipsNeeded - total)
+            return total >= chipsNeeded ? (sum.isEstimate ? .clearsOnAverage : .clears) : (sum.isEstimate ? .leavesAbout(left) : .leaves(left))
         }
 
         public init(label: String, sum: Sum? = nil, isAlternative: Bool = false) {
@@ -50,11 +57,11 @@ public struct Advice: Sendable, Equatable {
             var text = line.replacing("**", with: "")
             let isAlternative = text.lowercased().hasPrefix("instead")
             if isAlternative { text = "Instead: " + text.dropFirst("instead".count).drop { ",: ".contains($0) } }
-            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+(?:e\+?\d+)?)\s*[x×]\s*([\d,.]+(?:e\+?\d+)?)\s*(?:=|≈|~=|~)\s*(naneinf|[\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
+            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+(?:e\+?\d+)?)\s*[x×]\s*([\d,.]+(?:e\+?\d+)?)\s*(=|≈|~=|~)\s*(naneinf|[\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
                 self.init(label: text, isAlternative: isAlternative)
                 return
             }
-            self.init(label: String(match.1), sum: Sum(chips: String(match.2), mult: String(match.3), total: String(match.4)), isAlternative: isAlternative)
+            self.init(label: String(match.1), sum: Sum(chips: String(match.2), mult: String(match.3), total: String(match.5), isEstimate: match.4 != "="), isAlternative: isAlternative)
         }
     }
 

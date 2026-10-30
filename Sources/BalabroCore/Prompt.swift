@@ -57,8 +57,11 @@ enum Prompt {
         for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
         one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
         kind of hand, so they can compare the two. Write each line as "hand: chips x mult = total", with chips and mult \
-        after every card and joker that scores, always with "=" even when the numbers are rounded. Name the hand exactly, \
+        after every card and joker that scores, with "=" even when the numbers are rounded. Name the hand exactly, \
         such as "Diamond Flush" or "Pair of 9s". Leave the block out in the shop, in a pack and at a blind select.
+        - When a total depends on chance, such as Misprint's random mult, Lucky Cards or Bloodstone, use the average, write \
+        "≈" instead of "=" in that Score line, and give the average and the range in the first Why bullet, such as \
+        "Misprint averages +11.5 Mult, but it can be anything from +0 to +23".
         - End the steps at the first discard, play, reroll or pack opening, because that changes the board and you get the new state \
         straight away. Your next answer replaces these steps, so anything after that point would vanish. Put what \
         comes after in the Goal instead. Dragging jokers and buying cards don't change the board, so they can come \

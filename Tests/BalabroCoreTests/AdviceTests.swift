@@ -82,8 +82,8 @@ struct AdviceTests {
     @Test func roundedScoreLineStillGetsItsNumbers() {
         let a = Advice(markdown: "**Score:**\n- Pair of 6s: 230 x 1,291 ≈ 296,900\n- Instead, Pair of 4s: 226 x 1,291 ~ 291,800")
         #expect(a.score == [
-            .init(label: "Pair of 6s", sum: .init(chips: "230", mult: "1,291", total: "296,900")),
-            .init(label: "Instead: Pair of 4s", sum: .init(chips: "226", mult: "1,291", total: "291,800"), isAlternative: true),
+            .init(label: "Pair of 6s", sum: .init(chips: "230", mult: "1,291", total: "296,900", isEstimate: true)),
+            .init(label: "Instead: Pair of 4s", sum: .init(chips: "226", mult: "1,291", total: "291,800", isEstimate: true), isAlternative: true),
         ])
     }
 
@@ -136,6 +136,15 @@ struct AdviceTests {
         #expect(line("1,000").outcome(chipsNeeded: 3500) == .leaves("2,500"))
         #expect(line("lots").outcome(chipsNeeded: 2000) == nil)
         #expect(Advice.ScoreLine(label: "Pair: about 60").outcome(chipsNeeded: 2000) == nil)
+    }
+
+    @Test func aTotalThatRestsOnChanceIsAnEstimate() {
+        let a = Advice(markdown: "**Score:**\n- Pair of 3s: 226 x 49 ≈ 11,074\n- Instead, High Card: 25 x 4 = 100")
+        #expect(a.score[0].sum?.isEstimate == true)
+        #expect(a.score[1].sum?.isEstimate == false)
+        #expect(a.score[0].outcome(chipsNeeded: 11_000) == .clearsOnAverage)
+        #expect(a.score[0].outcome(chipsNeeded: 20_000) == .leavesAbout("8,926"))
+        #expect(a.score[1].outcome(chipsNeeded: 100) == .clears)
     }
 
     @Test func scoreLinesHandleNumbersUpToNaneinf() {

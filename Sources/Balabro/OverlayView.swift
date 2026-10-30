@@ -408,13 +408,22 @@ private struct ScoreRow: View {
                     numbers
                 }
             }
-            if !line.isAlternative, case .leaves(let chips) = outcome {
-                Text("Leaves \(chips) to score")
+            if !line.isAlternative, let note {
+                Text(note)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.muted)
             }
         }
         .opacity(line.isAlternative ? 0.6 : 1)
+    }
+
+    private var note: String? {
+        switch outcome {
+        case .clearsOnAverage: "Clears on average"
+        case .leaves(let chips): "Leaves \(chips) to score"
+        case .leavesAbout(let chips): "Leaves about \(chips) to score"
+        case .clears, nil: nil
+        }
     }
 
     private var label: some View {
@@ -428,7 +437,7 @@ private struct ScoreRow: View {
                 tile(sum.chips, ChipTile())
                 symbol("×")
                 tile(sum.mult, ChipTile(face: Theme.mult, lip: Theme.multDeep))
-                symbol("=")
+                symbol(sum.isEstimate ? "≈" : "=")
                 Text(sum.total).font(Theme.pixelFont(2)).foregroundStyle(outcome == .clears ? Theme.money : Theme.text)
                 if outcome == .clears {
                     Image(systemName: "checkmark")

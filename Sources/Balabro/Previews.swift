@@ -14,6 +14,7 @@ enum Previews {
             ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
             ("naneinf", CoachView(status: .ready, goal: .naneinf, headline: "Ante 26 · The Serpent", chipsNeeded: 3e184, advice: naneinf, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
+            ("estimate", CoachView(status: .ready, headline: "Ante 6 · Small Blind", chipsNeeded: 20000, advice: estimate, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 420, .none),
             ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
             ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]
@@ -68,6 +69,15 @@ enum Previews {
         lesson: Advice.Lesson(number: 3, title: "Two Pair is a draw, not a finish",
                               body: "Early in a blind, keep the pairs and throw the rest. You have hands to spare."),
         rest: "")
+
+    private static let estimate = Advice(
+        doNow: ["Play 7♦ 6♠ 4♠ 3♥ 3♣."],
+        score: [
+            .init(label: "Pair of 3s", sum: .init(chips: "226", mult: "49", total: "11,074", isEstimate: true)),
+            .init(label: "Instead: High Card", sum: .init(chips: "205", mult: "35", total: "7,175", isEstimate: true), isAlternative: true),
+        ],
+        why: ["Misprint averages +11.5 Mult, but it can be anything from +0 to +23."],
+        lesson: nil, rest: "")
 
     private static let naneinf = Advice(
         doNow: ["Play K♠."],
