@@ -107,7 +107,7 @@ struct OverlayContent: View {
             case .lookingAtPack:
                 Placeholder(title: "Looking at the pack", detail: "Taking a screenshot once the cards land.")
             case .thinking, .answering:
-                Placeholder(title: "Reading the board", detail: "Advice streams in here as Opus writes it.")
+                Placeholder(title: "Reading the board")
             case .ready:
                 Placeholder(title: "Ready", detail: "Ask anything about this run below.")
             }
@@ -325,12 +325,14 @@ private struct StatusLight: View {
 
 private struct Placeholder: View {
     let title: String
-    let detail: String
+    var detail: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(Theme.pixelFont(2)).foregroundStyle(Theme.chips)
-            Text(detail).font(Theme.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            if let detail {
+                Text(detail).font(Theme.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
