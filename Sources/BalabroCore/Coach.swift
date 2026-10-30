@@ -115,6 +115,13 @@ public struct Coach: Sendable {
     private func begin(_ purpose: CoachState.Purpose, _ state: inout CoachState) -> [CoachEffect] {
         if case .decision(let decision) = purpose {
             state.waitingDecision = nil
+            if let answer = decision.instantAnswer, let key = state.current, var record = state.runs[key] {
+                record.transcript.append(Exchange(title: decision.title, advice: answer))
+                record.lastCoached = decision.fingerprint
+                state.runs[key] = record
+                (state.activity, state.retryable, state.problem) = (.idle, nil, nil)
+                return [.save(record)]
+            }
             if decision.needsScreenshot { return capture(purpose, after: packSettleDelay, &state) }
         }
         return start(purpose, &state)

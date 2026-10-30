@@ -407,6 +407,66 @@ struct CoachTests {
         #expect(try JSONDecoder().decode(RunRecord.self, from: Data(json.utf8)).summary == nil)
     }
 
+    func bossSelect() throws -> RunSnapshot {
+        var snapshot = try snap("09-blind-select")
+        (snapshot.blindSelect.small, snapshot.blindSelect.big, snapshot.blindSelect.boss) = (.defeated, .defeated, .select)
+        return snapshot
+    }
+
+    @Test func onlyTheBossLeftNeedsNoTurn() throws {
+        var state = CoachState(restoring: [])
+        let effects = coach.reduce(&state, .saveWritten(try bossSelect()))
+        #expect(starts(effects).isEmpty)
+        #expect(state.view.status == .ready)
+        #expect(state.view.advice?.doNow == ["Select the Boss Blind, \(try bossSelect().blindSelect.bossKey)."])
+        #expect(state.view.advice?.why == ["It's the only blind left, and Boss Blinds can't be skipped."])
+    }
+
+    @Test func onlyTheBossLeftCancelsATurnInFlightAndKeepsTheHead() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("done", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .saveWritten(try snap("08-pack-closed")))
+        let effects = coach.reduce(&state, .saveWritten(try bossSelect()))
+        #expect(effects.contains(.cancelTurn(TurnID(1))))
+        #expect(state.view.status == .ready)
+        let next = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        #expect(starts(next).map(\.forkFrom) == [SessionID(rawValue: "S0")])
+    }
+
+    @Test func aQuestionInFlightStillFinishesFirst() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("done", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = coach.reduce(&state, .saveWritten(try bossSelect()))
+        #expect(state.view.status == .thinking)
+        let after = coach.reduce(&state, .turnOutput(TurnID(1), .done("because", SessionID(rawValue: "S1"))))
+        #expect(starts(after).isEmpty)
+        #expect(state.view.advice?.goal == "Beat the Boss Blind")
+        #expect(state.view.thread.isEmpty)
+    }
+
+    @Test(arguments: ["v_directors_cut", "v_retcon"])
+    func aBossRerollIsStillADecision(voucher: String) throws {
+        var state = CoachState(restoring: [])
+        var snapshot = try bossSelect()
+        snapshot.vouchers.append(CenterKey(rawValue: voucher))
+        #expect(starts(coach.reduce(&state, .saveWritten(snapshot))).count == 1)
+    }
+
+    @Test func luchadorIsStillADecision() throws {
+        var state = CoachState(restoring: [])
+        var snapshot = try bossSelect()
+        snapshot.jokers[0].key = CenterKey(rawValue: "j_luchador")
+        #expect(starts(coach.reduce(&state, .saveWritten(snapshot))).count == 1)
+    }
+
+    @Test func theBigBlindIsStillADecision() throws {
+        var state = CoachState(restoring: [])
+        #expect(starts(coach.reduce(&state, .saveWritten(try snap("09-blind-select")))).count == 1)
+    }
+
     @Test func roundEndSaysNothing() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)

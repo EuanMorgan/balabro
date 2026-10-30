@@ -24,6 +24,8 @@ public struct Decision: Sendable, Hashable {
     /// "the coach would be told the same thing". There's no second list of "decision-relevant fields" to keep in sync.
     public let prompt: String
     public let fingerprint: Fingerprint
+    /// The answer when there's nothing to decide, so no turn is spent on it.
+    public let instantAnswer: String?
 
     public var needsScreenshot: Bool {
         if case .openPack = kind { true } else { false }
@@ -44,7 +46,8 @@ public struct Decision: Sendable, Hashable {
         let prompt = Prompt.decision(kind, snapshot, text)
         return Decision(
             kind: kind, snapshot: snapshot, title: Prompt.title(kind, snapshot, text),
-            prompt: prompt, fingerprint: .of(prompt))
+            prompt: prompt, fingerprint: .of(prompt),
+            instantAnswer: kind == .blindSelect ? Prompt.onlyBossLeft(snapshot, text) : nil)
     }
 
     private static func kind(of s: RunSnapshot) -> Kind? {

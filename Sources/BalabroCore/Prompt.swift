@@ -126,6 +126,25 @@ enum Prompt {
         return text
     }
 
+    /// Boss Blinds can't be skipped, so once it's the only blind left there's one move, unless the player
+    /// can reroll the Boss or has Luchador to sell.
+    static func onlyBossLeft(_ s: RunSnapshot, _ text: GameText) -> String? {
+        let canChange = ["v_directors_cut", "v_retcon"].contains { s.vouchers.contains(CenterKey(rawValue: $0)) }
+            || s.jokers.contains { $0.key.rawValue == "j_luchador" }
+        guard s.blindSelect.boss == .select, !canChange else { return nil }
+        let rule = text[s.blindSelect.bossKey]?.text.joined(separator: " ") ?? ""
+        return """
+            **Do this now:**
+            1. Select the Boss Blind, \(name(s.blindSelect.bossKey, text)).
+
+            **Goal:** Beat the Boss Blind
+
+            **Why:**
+            - It's the only blind left, and Boss Blinds can't be skipped.
+            \(rule.isEmpty ? "" : "- \(rule).")
+            """
+    }
+
     static let screenshotMissing = """
         The screenshot of the game could not be taken, so you can't see the screen. \
         If the answer depends on cards the state doesn't list, such as a booster pack's contents, ask the player to list them.
