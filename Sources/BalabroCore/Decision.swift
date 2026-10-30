@@ -38,7 +38,7 @@ public struct Decision: Sendable, Hashable {
     ///    Every blind-select save (`game.lua:3265`, the skip at `button_callbacks.lua:2771`, the boss reroll at `:2846`)
     ///    is followed at once by a loop over `G.GAME.tags`, oldest first, that fires the first `new_blind_choice` tag.
     ///    That includes `tag_boss`, which opens no pack, so a Boss Tag held ahead of a pack tag means no pack yet.
-    /// 3. `.selectingHand` with a non-empty hand -> `.playHand`; `.shop` -> `.shop`; `.blindSelect` -> `.blindSelect`.
+    /// 3. `.selectingHand` -> `.playHand`; `.shop` -> `.shop`; `.blindSelect` -> `.blindSelect`.
     public static func detect(in snapshot: RunSnapshot, text: GameText) -> Decision? {
         guard let kind = kind(of: snapshot) else { return nil }
         let prompt = Prompt.decision(kind, snapshot, text)
@@ -54,7 +54,7 @@ public struct Decision: Sendable, Hashable {
             let firing = s.tags.first { $0.opensPack != nil || $0.rawValue == "tag_boss" }
             if let tag = firing, let pack = tag.pack { return .openPack(pack, from: .skipTag(tag)) }
             return .blindSelect
-        case .selectingHand: return s.hand.isEmpty ? nil : .playHand
+        case .selectingHand: return .playHand
         case .shop: return .shop
         case .pack, .roundEval, .gameOver, .other: return nil
         }

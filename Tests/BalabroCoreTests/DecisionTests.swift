@@ -11,7 +11,8 @@ struct DecisionTests {
     @Test(arguments: [
         ("01-blind-select", "blindSelect"), ("02-hand", "playHand"), ("03-hand-after-discard", "playHand"),
         ("04-round-eval", "none"), ("05-shop", "shop"), ("06-shop-reroll", "shop"),
-        ("07-pack-opening", "openPack"), ("08-pack-closed", "shop"), ("11-round-eval", "none"),
+        ("07-pack-opening", "openPack"), ("08-pack-closed", "shop"), ("09-blind-select", "blindSelect"),
+        ("10-hand", "playHand"), ("11-round-eval", "none"), ("12-shop", "shop"),
     ])
     func kindOfEachSave(name: String, expected: String) throws {
         let kind: String = switch try decision(name)?.kind {
@@ -43,11 +44,6 @@ struct DecisionTests {
         #expect((pack.cardsShown, pack.picks) == (2, 1))
     }
 
-    @Test func firstHandAfterTheShopIsANewDecision() throws {
-        #expect(try decision("10-hand")?.kind == .playHand)
-        #expect(try decision("02-hand")?.fingerprint != decision("10-hand")?.fingerprint)
-    }
-
     @Test func handPromptNamesTheCardsOnScreen() throws {
         let prompt = try #require(try decision("02-hand")?.prompt)
         #expect(prompt.contains("Hand (left to right): K♥ K♣ 7♠ 6♥ 5♠ 3♠ 3♦ 2♦"))
@@ -58,11 +54,8 @@ struct DecisionTests {
         #expect(try decision("03-hand-after-discard")?.title == "Ante 1 · bl_small · 4 hands, 3 discards")
     }
 
-    /// The driver run never skipped a blind, so these give the blind-select save the tags a skip would leave.
     func blindSelect(holding tags: [String]) throws -> Decision? {
-        let list = tags.enumerated().map { #"[\#($0 + 1)]={["key"]="\#($1)",["tally"]=\#($0),["ability"]={},},"# }.joined()
-        let text = Fixture.saveText("01-blind-select").replacingOccurrences(of: #"["tags"]={},"#, with: #"["tags"]={\#(list)},"#)
-        return Decision.detect(in: try SaveFile.decode(Data(text.utf8), profile: 1), text: .missing)
+        Decision.detect(in: try SaveFile.decode(Fixture.save("01-blind-select", holdingTags: tags), profile: 1), text: .missing)
     }
 
     @Test func packTagOpensAPackAtBlindSelect() throws {

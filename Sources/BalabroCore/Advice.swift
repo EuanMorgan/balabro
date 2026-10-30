@@ -93,7 +93,7 @@ public struct Advice: Sendable, Equatable {
         return body.trimmingCharacters(in: .whitespaces)
     }
 
-    /// `**Do this now:**`, `## Why`, `Lesson 12: title`, and a bold heading cut off mid-stream such as `**Do this now:`.
+    /// `**Do this now:**`, `## Why`, `Why:`, `Lesson 12: title`, and a bold heading cut off mid-stream such as `**Do this now:`.
     /// Returns the text after the heading on the same line too, so `**Why:** because` keeps "because".
     private static func heading(_ line: String) -> (Section, remainder: String)? {
         var text = Substring(line.drop { $0 == "#" }).trimmingCharacters(in: .whitespaces)[...]
@@ -104,9 +104,6 @@ public struct Advice: Sendable, Equatable {
                 remainder = text[close.upperBound...]
                 text = text[..<close.lowerBound]
             }
-        } else if let colon = text.firstIndex(of: ":") {
-            remainder = text[text.index(after: colon)...]
-            text = text[..<colon]
         }
         let label = text.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: ":"))
         let remainderText = remainder.trimmingCharacters(in: .whitespaces)
@@ -121,9 +118,6 @@ public struct Advice: Sendable, Equatable {
         let titleStart = afterWord.drop { $0 == " " }.dropFirst(digits.count)
         guard digits.isEmpty ? (titleStart.first == ":" || titleStart.isEmpty) : true else { return nil }
         let title = titleStart.trimmingCharacters(in: CharacterSet(charactersIn: ":-–— "))
-        if title.isEmpty, !remainderText.isEmpty, !line.hasPrefix("**") {
-            return (.lesson(number: Int(digits), title: remainderText), "")
-        }
         return (.lesson(number: Int(digits), title: title), remainderText)
     }
 }

@@ -7,6 +7,10 @@ import Testing
 struct CoachTests {
     let coach = Coach(text: .missing)
     func snap(_ name: String) throws -> RunSnapshot { try SaveFile.decode(Fixture.save(name), profile: 1) }
+    /// Everything but `.save`, which follows each change to the run's progress counters.
+    func actions(_ effects: [CoachEffect]) -> [CoachEffect] {
+        effects.filter { if case .save = $0 { false } else { true } }
+    }
     func starts(_ effects: [CoachEffect]) -> [TurnRequest] {
         effects.compactMap { if case .startTurn(let r) = $0 { r } else { nil } }
     }
@@ -137,12 +141,35 @@ struct CoachTests {
         #expect(state.view.problem == .screenRecordingDenied)
     }
 
-    @Test func screenshotForABoardThePlayerLeftIsIgnored() throws {
+    @Test func screenshotForAPackThePlayerClosedIsIgnored() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
-        let next = coach.reduce(&state, .saveWritten(try snap("08-pack-closed")))
-        #expect(starts(next).map(\.id) == [TurnID(1)])
+        let tagPack = try SaveFile.decode(Fixture.save("09-blind-select", holdingTags: ["tag_buffoon"]), profile: 1)
+        #expect(actions(coach.reduce(&state, .saveWritten(tagPack))) == [.captureGameWindow(CaptureID(1), after: .milliseconds(1800))])
         #expect(starts(coach.reduce(&state, .screenshot(CaptureID(0), png: Data([0x89])))).isEmpty)
+        #expect(starts(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))).count == 1)
+    }
+
+    @Test func decisionWaitsForTheScreenshotOfThePlayersQuestion() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
+        _ = coach.reduce(&state, done(0, "S0"))
+        _ = coach.reduce(&state, .ask("is this pack worth it?", withScreenshot: true))
+        #expect(actions(coach.reduce(&state, .saveWritten(try snap("06-shop-reroll")))).isEmpty)
+        let question = starts(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89]))))
+        #expect(question.map(\.message.text) == ["PLAYER QUESTION: is this pack worth it?"])
+        #expect(starts(coach.reduce(&state, done(2, "S2"))).first?.message.text.contains("$95.") == true)
+    }
+
+    @Test func nothingStartsOnItsOwnAfterAFailure() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, done(0, "S0"))
+        _ = coach.reduce(&state, .ask("why keep the 6?", withScreenshot: false))
+        _ = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
+        #expect(starts(coach.reduce(&state, .turnOutput(TurnID(1), .failed(.rateLimited(resetsAt: nil))))).isEmpty)
+        #expect(starts(coach.reduce(&state, .retry)).map(\.message.text) == ["PLAYER QUESTION: why keep the 6?"])
+        #expect(starts(coach.reduce(&state, done(2, "S2"))).first?.message.text.contains("discards 3") == true)
     }
 
     @Test func questionWithScreenshotCapturesAtOnce() throws {

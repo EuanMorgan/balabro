@@ -12,6 +12,11 @@ enum Fixture {
     static func stream(_ name: String) -> [Data] {
         data("claude-stream/\(name).jsonl").split(separator: UInt8(ascii: "\n")).map { Data($0) }
     }
+    /// A blind-select save holding the tags a skip would leave. The driver run never skipped a blind.
+    static func save(_ name: String, holdingTags tags: [String]) -> Data {
+        let list = tags.enumerated().map { #"[\#($0 + 1)]={["key"]="\#($1)",["tally"]=\#($0),["ability"]={},},"# }.joined()
+        return Data(saveText(name).replacingOccurrences(of: #"["tags"]={},"#, with: #"["tags"]={\#(list)},"#).utf8)
+    }
     static func data(_ path: String) -> Data {
         try! Data(contentsOf: Bundle.module.url(forResource: "Fixtures/\(path)", withExtension: nil)!)
     }
