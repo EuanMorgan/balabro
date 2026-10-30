@@ -93,7 +93,7 @@ struct StatsView: View {
                 Tile(label: "Rounds", value: career.rounds.formatted())
                 Tile(label: "Best ante", value: career.furthestAnte.formatted())
                 Tile(label: "Best hand", value: score(career.bestHand))
-                Tile(label: "Most money", value: "$\(career.mostMoney.formatted())")
+                Tile(label: "Most money", value: "$\(career.mostMoney.formatted())", colour: Theme.money)
             }
         }
     }
@@ -136,10 +136,11 @@ private struct Section<Content: View>: View {
 private struct Tile: View {
     let label: String
     let value: String
+    var colour = Theme.text
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(Theme.pixelFont(2)).foregroundStyle(Theme.text)
+            Text(value).font(Theme.pixelFont(2)).foregroundStyle(colour)
             Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted)
         }
     }
@@ -228,10 +229,8 @@ private struct RunRow: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
             }
-            Text(details)
-                .font(.system(size: 12))
+            ColouredText(details, size: 12)
                 .foregroundStyle(Theme.muted)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

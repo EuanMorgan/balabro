@@ -15,6 +15,7 @@ enum Previews {
             ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
             ("naneinf", CoachView(status: .ready, goal: .naneinf, headline: "Ante 26 · The Serpent", chipsNeeded: 3e184, advice: naneinf, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("estimate", CoachView(status: .ready, headline: "Ante 6 · Small Blind", chipsNeeded: 20000, advice: estimate, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 420, .none),
+            ("cash", CoachView(status: .ready, headline: "Ante 3 · Shop", advice: cash, thread: [], queuedQuestion: "Is $4 worth it?", problem: nil, canRetry: false), true, 520, .none),
             ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
             ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]
@@ -78,6 +79,13 @@ enum Previews {
         ],
         why: ["Misprint averages +11.5 Mult, but it can be anything from +0 to +23."],
         lesson: nil, rest: "")
+
+    private static let cash = Advice(
+        doNow: ["Buy Golden Joker (right, $6).", "Keep K♠ 3♦ for later, then reroll for $5, leaving $1,000, as planned."],
+        goal: "Stay above $25",
+        why: ["$25 earns the full $5 of interest."],
+        lesson: Advice.Lesson(number: 2, title: "Spend what's above $25", body: "Money past the cap, such as the $7 here, earns nothing."),
+        rest: "")
 
     private static let naneinf = Advice(
         doNow: ["Play K♠."],

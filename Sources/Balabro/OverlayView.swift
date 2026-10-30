@@ -69,8 +69,7 @@ struct OverlayContent: View {
                 })
             }
             if let queued = view.queuedQuestion {
-                Text("Next: \(queued)")
-                    .font(.system(size: 11))
+                ColouredText("Next: \(queued)", size: 11)
                     .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .padding(.horizontal, 16)
@@ -223,7 +222,7 @@ struct AdviceView: View {
                                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                                     Circle().fill(Theme.muted.opacity(0.6)).frame(width: 4, height: 4)
                                         .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 3 }
-                                    SuitText(line, size: 13).foregroundStyle(Theme.text.opacity(0.88))
+                                    ColouredText(line, size: 13).foregroundStyle(Theme.text.opacity(0.88))
                                 }
                             }
                         }
@@ -236,17 +235,15 @@ struct AdviceView: View {
                     Text(lesson.number.map { "Lesson \($0)" } ?? "Lesson")
                         .font(Theme.pixelFont(2))
                         .foregroundStyle(Theme.mult)
-                    Text(lesson.title)
-                        .font(.system(size: 13, weight: .semibold))
+                    ColouredText(lesson.title, size: 13, weight: .semibold)
                         .foregroundStyle(Theme.text)
-                        .fixedSize(horizontal: false, vertical: true)
                     if !lesson.body.isEmpty {
-                        SuitText(lesson.body, size: 13).foregroundStyle(Theme.muted)
+                        ColouredText(lesson.body, size: 13).foregroundStyle(Theme.muted)
                     }
                 }
             }
             if !advice.rest.isEmpty {
-                SuitText(advice.rest, size: 13).foregroundStyle(Theme.text.opacity(0.88))
+                ColouredText(advice.rest, size: 13).foregroundStyle(Theme.text.opacity(0.88))
             }
             if streaming { ThinkingDots() }
         }
@@ -329,14 +326,14 @@ private struct FollowUpThread: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         if followUp.sawScreen { Image(systemName: "camera.fill").font(.system(size: 10)) }
-                        SuitText(followUp.question, size: 13, weight: .medium)
+                        ColouredText(followUp.question, size: 13, weight: .medium)
                     }
                         .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.feltDeep))
                     if !followUp.reply.isEmpty {
-                        SuitText(followUp.reply, size: 13).foregroundStyle(Theme.text.opacity(0.88))
+                        ColouredText(followUp.reply, size: 13).foregroundStyle(Theme.text.opacity(0.88))
                     }
                     if followUp.changedSteps {
                         Text("Steps updated above")
@@ -427,7 +424,7 @@ private struct ScoreRow: View {
     }
 
     private var label: some View {
-        SuitText(line.label, size: 13, weight: .medium)
+        ColouredText(line.label, size: 13, weight: .medium)
             .foregroundStyle(Theme.muted)
     }
 
@@ -467,7 +464,7 @@ private struct Goal: View {
     let text: String
 
     var body: some View {
-        SuitText(text, size: 13, weight: .semibold).foregroundStyle(Theme.text)
+        ColouredText(text, size: 13, weight: .semibold).foregroundStyle(Theme.text)
     }
 }
 
@@ -483,13 +480,14 @@ private struct StepRow: View {
                 .frame(width: 24, height: 24)
                 .background(ChipTile())
                 .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
-            SuitText(text, size: 15, weight: .semibold)
+            ColouredText(text, size: 15, weight: .semibold)
                 .foregroundStyle(Theme.text)
         }
     }
 }
 
-private struct SuitText: View {
+/// Text in the game's colours: red and blue suits, and yellow cash.
+struct ColouredText: View {
     let attributed: AttributedString
     let size: CGFloat
     let weight: Font.Weight
@@ -506,6 +504,9 @@ private struct SuitText: View {
                     text[next..<text.characters.index(after: next)].kern = size * 0.45
                 }
             }
+        }
+        for match in String(text.characters).matches(of: /\$\d+(?:,\d+)*/) {
+            if let range = Range(match.range, in: text) { text[range].foregroundColor = Theme.money }
         }
         (attributed, self.size, self.weight) = (text, size, weight)
     }
