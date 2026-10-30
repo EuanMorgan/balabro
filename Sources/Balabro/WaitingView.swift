@@ -63,21 +63,23 @@ private struct ScoreTally: View {
         let progress = (time / 6).truncatingRemainder(dividingBy: 1)
         let chips = 10 + Int(progress * 90)
         let mult = 1 + Int(progress * 8)
-        let pulse = 1 + 0.06 * (1 - (progress * 8).truncatingRemainder(dividingBy: 1))
+        // Fades through the reset, so the numbers don't snap back to the start.
+        let fade = min(1, min(progress, 1 - progress) / 0.05)
+        let pulse = 1 + 0.06 * fade * (1 - (progress * 8).truncatingRemainder(dividingBy: 1))
         // Dies down just before the numbers reset, so the loop doesn't cut off a full flame.
         let heat = min(1, max(0, (progress - 0.15) / 0.45)) * min(1, (1 - progress) / 0.08)
         HStack(spacing: 8) {
-            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep, tip: Color(hex: 0x9BDCFF), time: time, heat: heat)
+            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep, tip: Color(hex: 0x9BDCFF), time: time, heat: heat, fade: fade)
             Text("×").font(.system(size: 20, weight: .heavy)).foregroundStyle(Theme.mult)
-            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep, tip: Theme.money, time: time + 40, heat: heat)
+            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep, tip: Theme.money, time: time + 40, heat: heat, fade: fade)
                 .scaleEffect(pulse)
         }
     }
 
-    private func tile(_ number: String, face: Color, lip: Color, tip: Color, time: Double, heat: Double) -> some View {
+    private func tile(_ number: String, face: Color, lip: Color, tip: Color, time: Double, heat: Double, fade: Double) -> some View {
         Text(number)
             .font(Theme.pixelFont(3))
-            .foregroundStyle(.white)
+            .foregroundStyle(.white.opacity(fade))
             .frame(width: 72, height: 44)
             .background(ChipTile(face: face, lip: lip))
             .background(alignment: .bottom) {
@@ -172,14 +174,17 @@ private struct CardFan: View {
 /// A booster pack wobbling on the spot, with a shine passing across the foil.
 private struct WobblingPack: View {
     let time: Double
+    private static let shineWidth = 0.4
 
     var body: some View {
-        let shine = (time / 2.4).truncatingRemainder(dividingBy: 1) * 2 - 0.5
+        // The band starts and ends wholly off the card, then rests, so restarting it can't be seen.
+        let sweep = min(1, (time / 2.4).truncatingRemainder(dividingBy: 1) / 0.6)
+        let shine = -Self.shineWidth + sweep * (1 + Self.shineWidth)
         ZStack {
             RoundedRectangle(cornerRadius: 4)
                 .fill(LinearGradient(colors: [Theme.chips, Theme.mult], startPoint: .topLeading, endPoint: .bottomTrailing))
             LinearGradient(colors: [.clear, .white.opacity(0.45), .clear],
-                           startPoint: UnitPoint(x: shine - 0.3, y: 0), endPoint: UnitPoint(x: shine + 0.3, y: 1))
+                           startPoint: UnitPoint(x: shine, y: shine), endPoint: UnitPoint(x: shine + Self.shineWidth, y: shine + Self.shineWidth))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             VStack(spacing: 0) {
                 Rectangle().fill(Theme.muted).frame(height: 6)
