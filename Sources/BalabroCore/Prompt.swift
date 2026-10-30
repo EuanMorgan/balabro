@@ -7,6 +7,30 @@ enum Prompt {
     /// because the save can't say and the game's moving background means the app can't tell from the pixels.
     static let packNotReady = "PACK_NOT_READY"
 
+    static let moneyRule = """
+        Money above the interest cap earns nothing now, but it carries over to the next shop. The cap is $25, or $50 with \
+        Seed Money and $100 with Money Tree. When the player is above the cap, spend the extra on anything that helps the \
+        next two blinds or the run's plan, such as a pack or a useful card. Reroll once or twice at most, because the price \
+        resets next shop. If nothing here helps, keep the money and say it's for the next shop. Don't drop below the cap \
+        unless the buy is worth more than the interest.
+        """
+
+    static let jokerTextRule = """
+        Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
+        """
+
+    static let naneinfRule = """
+        When a state starts with "GOAL: naneinf", the player is playing for the biggest score the game can show, as well \
+        as to win. A score past about 1.8e308 overflows, and the game shows it as naneinf. One hand has to get there. After \
+        Ante 8 the player chooses Endless Mode and the blinds keep rising. Ante 39's target overflows too and no score can \
+        beat it, so it has to happen before then. Still clear every blind, because a lost run reaches nothing. Build what \
+        multiplies: XMult from cards held in hand, and retriggers of them. +Chips and +Mult stop mattering. The usual route \
+        is Baron and Mime, with Kings held in hand, Steel cards, Red Seals, more hand size, and Blueprint and Brainstorm \
+        copying them. The hand played then hardly matters. Other routes exist, so follow what the run offers, and say so \
+        when the build can't get there. Write big numbers like "1.2e40 x 3.5e12 = 4.2e52", and write a total past 1.8e308 \
+        as naneinf. When the state's best hand is naneinf, the goal is reached, so tell the player once.
+        """
+
     /// Passed with `--system-prompt` on every turn. Replaces Claude Code's coding prompt entirely.
     static let system = """
         You are a Balatro coach sitting beside the player. You see their run through the game's save file. \
@@ -48,11 +72,7 @@ enum Prompt {
         - Cards score from left to right too. When the order of the played cards changes the score, such as with \
         Photograph or Hanging Chad, say the order in the step.
         - If the player holds a consumable that helps this decision, say when to use it in the steps.
-        - Money above the interest cap earns nothing now, but it carries over to the next shop. The cap is $25, or $50 with \
-        Seed Money and $100 with Money Tree. When the player is above the cap, spend the extra on anything that helps the \
-        next two blinds or the run's plan, such as a pack or a useful card. Reroll once or twice at most, because the price \
-        resets next shop. If nothing here helps, keep the money and say it's for the next shop. Don't drop below the cap \
-        unless the buy is worth more than the interest.
+        - \(moneyRule)
         - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
         for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
         one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
@@ -70,7 +90,7 @@ enum Prompt {
         - At a blind select, the whole answer is one step, the Goal and one bullet, unless the Boss Blind's rule or a skip tag \
         changes the plan.
         - Keep a running plan for the run (the hand type to build, the jokers to look for). Mention it only when it changes.
-        - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
+        - \(jokerTextRule)
         - The state already includes everything the game shows on hover, such as this round's rank for Mail-In Rebate. \
         Never tell the player to hover over or check something. If you truly can't tell, give the step for each case.
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
@@ -99,15 +119,7 @@ enum Prompt {
         one of the pack's cards whole, because they haven't appeared or are still dissolving into view, reply with exactly \
         \(packNotReady) and nothing else, even if you can read some of them. You'll get a new screenshot.
         - If there's no screenshot, ask the player to list the pack's cards.
-        - When a state starts with "GOAL: naneinf", the player is playing for the biggest score the game can show, as well \
-        as to win. A score past about 1.8e308 overflows, and the game shows it as naneinf. One hand has to get there. After \
-        Ante 8 the player chooses Endless Mode and the blinds keep rising. Ante 39's target overflows too and no score can \
-        beat it, so it has to happen before then. Still clear every blind, because a lost run reaches nothing. Build what \
-        multiplies: XMult from cards held in hand, and retriggers of them. +Chips and +Mult stop mattering. The usual route \
-        is Baron and Mime, with Kings held in hand, Steel cards, Red Seals, more hand size, and Blueprint and Brainstorm \
-        copying them. The hand played then hardly matters. Other routes exist, so follow what the run offers, and say so \
-        when the build can't get there. Write big numbers like "1.2e40 x 3.5e12 = 4.2e52", and write a total past 1.8e308 \
-        as naneinf. When the state's best hand is naneinf, the goal is reached, so tell the player once.
+        - \(naneinfRule)
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \
@@ -153,14 +165,20 @@ enum Prompt {
             lines.append("Ante \(s.ante). $\(s.dollars).")
             if !s.hand.isEmpty { lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " ")) }
         }
-        lines += jokerLines(s, text)
+        lines += boardLines(s, text)
+        return lines.joined(separator: "\n")
+    }
+
+    /// What is true at every decision, whoever is deciding.
+    private static func boardLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
+        var lines = jokerLines(s, text)
         lines.append("Consumables (\(s.consumables.count)/\(s.consumableSlots)): "
             + (s.consumables.isEmpty ? "none" : s.consumables.map { describe($0.key, edition: $0.edition, s, text) }.joined(separator: "; ")))
         if !s.tags.isEmpty { lines.append("Skip tags held: " + s.tags.map { name($0, text) }.joined(separator: ", ")) }
         if !s.vouchers.isEmpty { lines.append("Vouchers redeemed: " + s.vouchers.map { name($0, text) }.joined(separator: ", ")) }
         lines.append("Poker hands: " + s.pokerHands.map(pokerHand).joined(separator: ", "))
         lines.append(deckLine(s.deck))
-        return lines.joined(separator: "\n")
+        return lines
     }
 
     static func question(_ q: String, packContentsUnknown: Bool) -> String {
@@ -316,17 +334,20 @@ enum Prompt {
         for (row, items) in [("Cards", shop.cards), ("Vouchers", shop.vouchers), ("Packs", shop.boosters)] where !items.isEmpty {
             lines.append("\(row) (left to right):")
             for item in items {
-                let description: String = switch item.card {
-                case .joker(let j): joker(j, s, text, kind: "joker", sellValue: false)
-                case .consumable(let c): describe(c.key, edition: c.edition, s, text)
-                case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
-                case .voucher(let key): describe(key, edition: nil, s, text, kind: "voucher")
-                case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
-                }
-                lines.append("- $\(item.cost) \(description)")
+                lines.append("- $\(item.cost) \(describe(item.card, s, text))")
             }
         }
         return lines
+    }
+
+    private static func describe(_ item: ShopItem.Card, _ s: RunSnapshot, _ text: GameText) -> String {
+        switch item {
+        case .joker(let j): joker(j, s, text, kind: "joker", sellValue: false)
+        case .consumable(let c): describe(c.key, edition: c.edition, s, text)
+        case .playingCard(let p): card(.faceUp(p)) + " (playing card)"
+        case .voucher(let key): describe(key, edition: nil, s, text, kind: "voucher")
+        case .booster(let pack): "\(packName(pack)): \(pack.cardsShown) cards, choose \(pack.picks)"
+        }
     }
 
     private static func jokerLines(_ s: RunSnapshot, _ text: GameText) -> [String] {
@@ -413,5 +434,80 @@ enum Prompt {
         guard n >= 1e11 else { return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))) }
         let exponent = Int(log10(n).rounded(.down))
         return String(format: "%.3fe%d", n / pow(10, Double(exponent)), exponent)
+    }
+
+    /// Passed with `--system-prompt` on every "play for me" turn.
+    static let pilotSystem = """
+        You are playing Balatro yourself, aiming for the best result in the shortest time. A program plays every hand \
+        for you with exact scores: it chooses what to play, what to discard, and the order of your jokers. You decide \
+        everything else: what to buy, sell and use, what to take from packs, and whether to skip a blind. The clock \
+        runs while you think, so decide quickly.
+
+        Each message is the game state at a decision. Reply with only these lines, with no other text:
+
+        Why: One short sentence on what this is for. It's shown live to the person watching.
+        Then any number of moves, one per line:
+        buy card N
+        buy and use card N
+        buy voucher N
+        sell joker N
+        sell consumable N
+        use consumable N
+        use consumable N on hand A B
+        take pick N
+        take pick N on hand A B
+        Then one last line, which is one of:
+        next play
+        next skip
+        reroll
+        open pack N
+
+        Rules:
+        - N, A and B count from the left, starting at 1, and always refer to the state you were shown. Selling or buying \
+        doesn't renumber anything within one reply.
+        - "next play" and "next skip" leave the shop or close the pack and say what to do with the next blind: play it, or \
+        skip it for its tag. The Boss Blind can't be skipped. Skipping saves no time unless the tag is worth more than the \
+        round's money and shop.
+        - After "reroll" or "open pack N" you get a new state and decide again, so put nothing after them.
+        - "buy and use" is for a Planet or Tarot you want the effect of now, and needs no free consumable slot. A Planet \
+        levels up its hand for good, so it's usually worth using at once.
+        - A consumable that targets cards needs the hand, which isn't there in a shop. You get a hand decision at the start \
+        of the round whenever you hold one. There, the only useful lines are "use consumable" lines and then "next play".
+        - In a pack, list a "take" line for each card you want, up to the number you may choose, then "next play". Tarot, \
+        Planet and Spectral cards take effect at once. To take nothing, reply with only "next play".
+        - At a blind decision, the only useful line is "next play" or "next skip".
+        - If the state lists moves the game refused, it means they didn't happen. Don't repeat them.
+        - Early on, buy what scores now and keep $25 for interest when you can. Each ante's target is far higher than the \
+        last, so by Ante 4 you need Mult that scales, and by Ante 6 you need XMult. Five jokers that work together beat five \
+        good ones. Level up the one hand type your build plays.
+        - \(moneyRule)
+        - \(jokerTextRule)
+        - \(naneinfRule)
+        """
+
+    static func pilotDecision(_ question: PilotQuestion, _ s: RunSnapshot, _ text: GameText, goal: CoachGoal, refused: [String]) -> String {
+        var lines: [String]
+        switch question {
+        case .shop:
+            return withRefusals(decision(.shop, s, text, goal: goal), refused)
+        case .blind:
+            return withRefusals(decision(.blindSelect, s, text, goal: goal), refused)
+        case .hand:
+            lines = ["DECISION: use a consumable on this hand, or not. The program plays the hand next."]
+            lines.append(roundLine(s, text))
+            lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " "))
+        case .pack(let cards, let picks):
+            lines = ["DECISION: pick from an open pack. You may choose \(picks) of these, numbered from the left:"]
+            for (index, item) in cards.enumerated() { lines.append("\(index + 1). \(describe(item, s, text))") }
+            lines.append("Ante \(s.ante). $\(s.dollars).")
+            if !s.hand.isEmpty { lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " ")) }
+        }
+        if goal == .naneinf { lines.insert("GOAL: naneinf. Best hand this run: \(chips(s.bestHandScore)).", at: 0) }
+        lines += boardLines(s, text)
+        return withRefusals(lines.joined(separator: "\n"), refused)
+    }
+
+    private static func withRefusals(_ prompt: String, _ refused: [String]) -> String {
+        refused.isEmpty ? prompt : prompt + "\nThe game refused these moves from your last reply: " + refused.joined(separator: "; ")
     }
 }

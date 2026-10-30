@@ -18,6 +18,9 @@ enum BalabroApp {
         if let root = value(after: "--print-next-run", in: arguments) {
             exit(await printNextRun(URL(filePath: root)))
         }
+        if let goal = value(after: "--play-for-me", in: arguments).flatMap(CoachGoal.init) {
+            exit(await playForMe(goal))
+        }
         if arguments.contains("--locate-claude") {
             exit(await locateClaude())
         }
@@ -85,6 +88,26 @@ enum BalabroApp {
         }
     }
 
+    /// Plays one run without the overlay, printing what the panel would show, so a run can be measured from a script.
+    private static func playForMe(_ goal: CoachGoal) async -> Int32 {
+        setlinebuf(stdout)
+        let game = GameInstall.find()
+        let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: PilotRuntime.conversations)
+        let pilot = PilotRuntime(pilot: Pilot(text: await game?.loadText() ?? .missing), results: .default, claude: claude, game: game)
+        pilot.start(goal: goal)
+        var last = ""
+        while pilot.view.status != .finished {
+            let run = pilot.view.run
+            let line = "ante \(run?.ante ?? 0) round \(run?.round ?? 0) $\(run?.dollars ?? 0) best \(run?.bestHandText ?? "0") \(run?.doing ?? "") | \(pilot.view.status) | \(pilot.view.why ?? "")"
+            if line != last { print(line) }
+            last = line
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        guard let result = pilot.view.result else { return 1 }
+        print("RESULT \(result.ending) ante \(result.ante) round \(result.round) best \(result.bestHandText) in \(Int(result.seconds)) s")
+        return 0
+    }
+
     private static func update() async -> Int32 {
         guard let updater = Updater() else {
             print("Only a packaged Balabro.app can update itself.")
@@ -120,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let savesRoot: URL
     private var runtime: CoachRuntime?
+    private var pilot: PilotRuntime?
     private var overlay: OverlayPanel?
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem?
@@ -141,9 +165,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: Self.conversations)
 
         let runtime = CoachRuntime(coach: Coach(text: text), store: .default, claude: claude)
-        let overlay = OverlayPanel(runtime: runtime, updater: updater)
+        let pilot = PilotRuntime(pilot: Pilot(text: text), results: .default, claude: claude, game: game)
+        let overlay = OverlayPanel(runtime: runtime, pilot: pilot, updater: updater)
         overlay.orderFrontRegardless()
-        (self.runtime, self.overlay) = (runtime, overlay)
+        (self.runtime, self.pilot, self.overlay) = (runtime, pilot, overlay)
         hotKey = HotKey(HotKey.default) { overlay.focusQuestionField() }
         statusItem = makeStatusItem()
         if let updater { Task { await updater.watch() } }

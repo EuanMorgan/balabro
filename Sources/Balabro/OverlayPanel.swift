@@ -12,7 +12,7 @@ import SwiftUI
 ///   goes to the field and every other click leaves the game's keyboard alone.
 @MainActor
 final class OverlayPanel: NSPanel {
-    init(runtime: CoachRuntime, updater: Updater?) {
+    init(runtime: CoachRuntime, pilot: PilotRuntime, updater: Updater?) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 320, height: 500),
                    styleMask: [.borderless, .nonactivatingPanel, .resizable, .fullSizeContentView],
                    backing: .buffered, defer: false)
@@ -25,7 +25,7 @@ final class OverlayPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         minSize = NSSize(width: 280, height: 240)
-        contentView = NSHostingView(rootView: OverlayView(runtime: runtime, updater: updater))
+        contentView = NSHostingView(rootView: OverlayView(runtime: runtime, pilot: pilot, updater: updater))
         if let screen = NSScreen.main?.visibleFrame {
             setFrameOrigin(NSPoint(x: screen.maxX - frame.width - 24, y: screen.maxY - frame.height - 24))
         }

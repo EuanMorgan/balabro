@@ -12,6 +12,8 @@ public struct ClaudeInvocation: Sendable, Hashable {
     /// and `--resume` only finds sessions filed under the current cwd.
     public var workingDirectory: URL
     public var model = "claude-opus-5-5"
+    /// The coach's unless a caller has its own job for Claude. `--resume` keeps the first turn's.
+    public var systemPrompt = Prompt.system
 
     public init(executable: URL, configDir: URL?, searchPath: String, workingDirectory: URL) {
         (self.executable, self.configDir, self.searchPath, self.workingDirectory) = (executable, configDir, searchPath, workingDirectory)
@@ -33,7 +35,7 @@ public struct ClaudeInvocation: Sendable, Hashable {
     public func arguments(forkFrom: SessionID?) -> [String] {
         var args = [
             "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-            "--model", model, "--system-prompt", Prompt.system,
+            "--model", model, "--system-prompt", systemPrompt,
             "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands",
         ]
         if let forkFrom { args += ["--resume", forkFrom.rawValue, "--fork-session"] }

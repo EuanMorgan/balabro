@@ -23,12 +23,20 @@ import SwiftUI
 /// ```
 struct OverlayView: View {
     let runtime: CoachRuntime
+    let pilot: PilotRuntime
     let updater: Updater?
 
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, adviseNextRun: runtime.adviseNextRun, setGoal: runtime.setGoal, update: updater?.status ?? .none, install: {
-            Task { if await updater?.install() == true { NSApp.terminate(nil) } }
-        }, screenAccess: ScreenAccess.isGranted)
+        if pilot.view.status == .idle {
+            OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, adviseNextRun: runtime.adviseNextRun, setGoal: runtime.setGoal, playForMe: { pilot.start(goal: runtime.view.goal) }, update: updater?.status ?? .none, install: {
+                Task { if await updater?.install() == true { NSApp.terminate(nil) } }
+            }, screenAccess: ScreenAccess.isGranted)
+        } else {
+            PilotPanel(view: pilot.view, stop: pilot.stop, close: pilot.dismiss, again: {
+                pilot.dismiss()
+                pilot.start(goal: runtime.view.goal)
+            })
+        }
     }
 }
 
@@ -39,6 +47,7 @@ struct OverlayContent: View {
     var refresh: () -> Void = {}
     var adviseNextRun: () -> Void = {}
     var setGoal: (CoachGoal) -> Void = { _ in }
+    var playForMe: () -> Void = {}
     var update = Updater.Status.none
     var install: () -> Void = {}
     var screenAccess = true
@@ -120,6 +129,15 @@ struct OverlayContent: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+            Button(action: playForMe) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Play for me: Balabro plays a run by itself in its own copy of the game, as fast as it can. Your own run and stats aren't touched")
+            .accessibilityLabel("Play for me")
             Button {
                 setGoal(view.goal == .naneinf ? .win : .naneinf)
             } label: {
@@ -584,7 +602,7 @@ private struct ProblemBanner: View {
     }
 }
 
-private struct ChipButton: View {
+struct ChipButton: View {
     let title: String
     let action: () -> Void
 
@@ -614,7 +632,7 @@ struct ChipTile: View {
     }
 }
 
-private struct Panel: View {
+struct Panel: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(Theme.feltDeep)

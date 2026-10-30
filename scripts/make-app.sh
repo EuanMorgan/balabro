@@ -15,6 +15,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Balabro" "$app/Contents/MacOS/Balabro"
 sed "s/__VERSION__/$version/g" "$root/Packaging/Info.plist" > "$app/Contents/Info.plist"
 cp "$root/Packaging/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
+cp -R "$root/bot" "$app/Contents/Resources/bot"
 
 # There is no Developer ID, so Gatekeeper blocks the download until the user clicks Open Anyway in
 # Privacy & Security, as the README explains. Releases must use the certificate from

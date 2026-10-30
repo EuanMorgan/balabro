@@ -33,6 +33,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 6. If the steps ever look wrong or out of date, click the **refresh arrow** at the top of the panel. The coach looks at the screen again and gives new steps.
 7. When a run ends, the coach suggests which deck and stake to play next, based on your wins and what you have unlocked. With no run going, click **What should I play next?** to ask.
 8. To chase naneinf, the score so big that it overflows the game, click the **infinity sign** at the top of the panel. It turns gold, and the coach plays for the biggest possible score and takes you into Endless Mode after a win. It stays on across runs until you click it again.
+9. To watch Balabro play a run by itself, click the **play button** at the top of the panel. It opens its own copy of Balatro in a small window and plays as fast as it can. The panel shows the time, the ante, the best hand and what it's doing. A program works out each play and discard with the game's own scoring, and Claude chooses what to buy, sell and use. It uses Red Deck, or Plasma Deck if the infinity sign is on, when it keeps going into Endless Mode for naneinf. It uses only what a player could see: it never reads the draw order or uses a known seed. Your own save, stats and achievements aren't touched. Each run uses your Claude plan, as coaching does. Click **Stop** to end it.
 
 To see how you play over time, click the Balabro icon in the menu bar and choose **Your stats**. All-time totals come from the game's own profile. Run-by-run history starts when you first play with this version.
 
@@ -75,6 +76,8 @@ swift run Balabro --print-prompt Tests/BalabroCoreTests/Fixtures/saves/02-hand.j
 tools/driver/run.sh /tmp/balabro-saves &
 swift run Balabro --saves-root "$HOME/Library/Application Support/LOVE/balabro-driver-game"
 ```
+
+`tools/bot/drive.py` plays a run with your installed Balatro and a fixed plan instead of Claude, to test the "play for me" bot. Run it with `BALABRO_BOT_VERIFY=1` after a Balatro update: it checks that predicted scores match the real ones, and that changing what a player can't see doesn't change the bot's choices. To play one real run from the command line, run `dist/Balabro.app/Contents/MacOS/Balabro --play-for-me win` or `naneinf`.
 
 To build the app and its zip for a release, run `scripts/make-app.sh <version>`. The output is in `dist/`. Run `scripts/make-signing-identity.sh` once first, so that users keep their Screen Recording permission across updates. Without it, the build is signed ad-hoc and each update loses the permission.
 

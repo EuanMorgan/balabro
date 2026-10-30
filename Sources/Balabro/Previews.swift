@@ -25,6 +25,18 @@ enum Previews {
             try? png.write(to: url)
             print(url.path)
         }
+        let run = BotStatus(ante: 4, round: 11, dollars: 41, bestHand: 4420, doing: "Discarding 3 cards, 61% to reach 2,442")
+        let result = PilotResult(goal: "win", deck: CenterKey(rawValue: "b_red"), stake: 1, ending: .won, ante: 8, round: 24, bestHand: 88_000, seconds: 412, gameVersion: "1.0.1o", finishedAt: .now)
+        let pilots: [(String, PilotView)] = [
+            ("playing", PilotView(status: .playing, startedAt: .now.addingTimeInterval(-136), run: run, why: "Hologram gives scaling XMult, which beats Sly Joker's flat chips, for $6.")),
+            ("finished", PilotView(status: .finished, result: result, bestTimes: [BestTime(title: "Fastest win", seconds: 412)])),
+        ]
+        for (name, view) in pilots {
+            let url = directory.appending(path: "pilot-\(name).png")
+            guard let png = snapshot(PilotPanel(view: view, stop: {}, close: {}, again: {}), height: 300) else { return 1 }
+            try? png.write(to: url)
+            print(url.path)
+        }
         let stats = StatsView(data: StatsData.load(savesRoot: SaveWatcher.defaultRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing)
         try? snapshot(stats, width: 520, height: 900)?.write(to: directory.appending(path: "stats.png"))
         return 0

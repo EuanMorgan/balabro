@@ -13,6 +13,12 @@ public enum SaveFile {
         try RunSnapshot(lua: LuaLiteral.parse(text(of: bytes)), profile: profile)
     }
 
+    /// An open pack's cards. The game's own saves never hold them, because it saves before they exist, but a save made
+    /// after they've landed does.
+    public static func decodePackCards(_ bytes: Data) throws(SaveFileError) -> [ShopItem.Card] {
+        try RunSnapshot.packCards(lua: LuaLiteral.parse(text(of: bytes)))
+    }
+
     /// Decodes `profile.jkr`, where the game keeps its all-time totals.
     public static func decodeCareer(_ bytes: Data) throws(SaveFileError) -> CareerStats {
         try CareerStats(lua: LuaLiteral.parse(text(of: bytes)))
@@ -151,6 +157,15 @@ extension CareerStats {
 }
 
 extension RunSnapshot {
+    static func packCards(lua root: LuaValue) throws(SaveFileError) -> [ShopItem.Card] {
+        let root = Node(value: root, path: "")
+        return try (root.child("cardAreas")?.child("pack_cards")?.child("cards")?.elements ?? []).map(Self.packCard)
+    }
+
+    private static func packCard(_ node: Node) throws(SaveFileError) -> ShopItem.Card {
+        try shopItem(node).card
+    }
+
     /// Maps the top-level save table (`cardAreas`, `tags`, `GAME`, `STATE`, `ACTION`, `BLIND`, `BACK`, `VERSION`).
     ///
     /// Strict on keys that define a decision (STATE, hand, jokers, dollars), lenient on everything else:
