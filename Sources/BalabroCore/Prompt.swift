@@ -19,7 +19,8 @@ enum Prompt {
         - Two Pair: 46 x 2 = 92
         - Full House, if you draw it: 76 x 4 = 304
 
-        **Goal:** At most eight words on what this is building towards, such as "Going for a Straight" or "Saving up for a \
+        **Goal:** At most eight words. If the steps play a hand now, name it, such as "Playing a Diamond Flush to clear \
+        the blind". Otherwise say what this is building towards, such as "Going for a Straight" or "Saving up for a \
         second joker".
 
         **Why:**
