@@ -145,7 +145,7 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
         let tagPack = try SaveFile.decode(Fixture.save("09-blind-select", holdingTags: ["tag_buffoon"]), profile: 1)
-        #expect(actions(coach.reduce(&state, .saveWritten(tagPack))) == [.captureGameWindow(CaptureID(1), after: .milliseconds(1800))])
+        #expect(actions(coach.reduce(&state, .saveWritten(tagPack))) == [.captureGameWindow(CaptureID(1), after: .milliseconds(3500))])
         #expect(starts(coach.reduce(&state, .screenshot(CaptureID(0), png: Data([0x89])))).isEmpty)
         #expect(starts(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))).count == 1)
     }
@@ -473,6 +473,67 @@ struct CoachTests {
     @Test func theBigBlindIsStillADecision() throws {
         var state = CoachState(restoring: [])
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("09-blind-select")))).count == 1)
+    }
+
+    func packOpenedAndLookedAt(_ state: inout CoachState) throws {
+        _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: Data([0x89])))
+    }
+
+    @Test func tooEarlyAScreenshotLooksAgainAndLeavesNoTrace() throws {
+        var state = CoachState(restoring: [])
+        try packOpenedAndLookedAt(&state)
+        let again = coach.reduce(&state, .turnOutput(TurnID(1), .done("PACK_NOT_READY", SessionID(rawValue: "EARLY"))))
+        #expect(again == [.captureGameWindow(CaptureID(2), after: .milliseconds(1500))])
+        #expect(state.view.status == .lookingAtPack)
+
+        let turn = starts(coach.reduce(&state, .screenshot(CaptureID(2), png: Data([0x89, 0x50]))))
+        #expect(turn.map(\.forkFrom) == [nil])
+        #expect(turn.map(\.message.screenshotPNG) == [Data([0x89, 0x50])])
+        _ = coach.reduce(&state, .turnOutput(TurnID(3), .done("**Do this now:**\n1. Pick Jupiter.", SessionID(rawValue: "S3"))))
+        #expect(state.view.advice?.doNow == ["Pick Jupiter."])
+        #expect(state.view.sawScreen)
+    }
+
+    @Test func tooManyEarlyScreenshotsAsksThePlayerWithoutAPermissionWarning() throws {
+        var state = CoachState(restoring: [])
+        try packOpenedAndLookedAt(&state)
+        var last: [CoachEffect] = []
+        for look in 0..<coach.maxPackLooks {
+            last = coach.reduce(&state, .turnOutput(TurnID(look * 2 + 1), .done("PACK_NOT_READY", SessionID(rawValue: "E"))))
+            if look < coach.maxPackLooks - 1 {
+                _ = coach.reduce(&state, .screenshot(CaptureID(look * 2 + 2), png: Data([0x89])))
+            }
+        }
+        let turn = try #require(starts(last).first)
+        #expect(turn.message.screenshotPNG == nil)
+        #expect(turn.message.text.contains("could not be taken"))
+        #expect(state.view.problem == nil)
+    }
+
+    @Test func aNewDecisionDuringALookStopsTheLooking() throws {
+        var state = CoachState(restoring: [])
+        try packOpenedAndLookedAt(&state)
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("PACK_NOT_READY", SessionID(rawValue: "E"))))
+        _ = coach.reduce(&state, .saveWritten(try snap("08-pack-closed")))
+        #expect(starts(coach.reduce(&state, .screenshot(CaptureID(2), png: Data([0x89])))).isEmpty)
+        #expect(state.view.waitingOn == .shop)
+    }
+
+    @Test func thatReplyIsNeverShownAsAdvice() throws {
+        var state = CoachState(restoring: [])
+        try packOpenedAndLookedAt(&state)
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .text("PACK_NOT")))
+        #expect(state.view.advice == nil)
+        #expect(state.view.status == .thinking)
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .text("_READY")))
+        #expect(state.view.advice == nil)
+    }
+
+    @Test func aTagPackWaitsLongerThanAShopPack() throws {
+        var state = CoachState(restoring: [])
+        let tagPack = try SaveFile.decode(Fixture.save("09-blind-select", holdingTags: ["tag_charm"]), profile: 1)
+        #expect(actions(coach.reduce(&state, .saveWritten(tagPack))) == [.captureGameWindow(CaptureID(0), after: .milliseconds(3500))])
     }
 
     @Test func roundEndSaysNothing() throws {

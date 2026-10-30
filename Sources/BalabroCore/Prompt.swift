@@ -3,6 +3,10 @@ import Foundation
 /// Everything Claude is told. Plain text, deterministic for a given snapshot (sorted keys, fixed order),
 /// because `Decision.fingerprint` hashes it. Nothing goes in that changes without the decision changing.
 enum Prompt {
+    /// Claude's reply when a pack's screenshot came too early. It's the check for "has the pack opened?",
+    /// because the save can't say and the game's moving background means the app can't tell from the pixels.
+    static let packNotReady = "PACK_NOT_READY"
+
     /// Passed with `--system-prompt` on every turn. Replaces Claude Code's coding prompt entirely.
     static let system = """
         You are a Balatro coach sitting beside the player. You see their run through the game's save file. \
@@ -77,7 +81,9 @@ enum Prompt {
         new hand.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
         player opens it.
-        - If a booster pack's cards are not in the screenshot, or there is no screenshot, ask the player to list them.
+        - A screenshot can be taken before a pack finishes opening. If a pack decision's screenshot doesn't show the \
+        pack's cards yet, reply with exactly \(packNotReady) and nothing else. You'll get a new screenshot.
+        - If there's no screenshot, ask the player to list the pack's cards.
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \

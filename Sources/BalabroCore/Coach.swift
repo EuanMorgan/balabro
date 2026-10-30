@@ -16,6 +16,11 @@ public struct Coach: Sendable {
     public let text: GameText
     /// How long after a pack opens before the cards have finished flying in.
     public var packSettleDelay: Duration = .milliseconds(1800)
+    /// A skip tag plays its own animation before the pack starts to open.
+    public var tagPackSettleDelay: Duration = .milliseconds(3500)
+    /// Claude says within seconds if the pack isn't up yet, so looking again costs little.
+    public var packRetryDelay: Duration = .milliseconds(1500)
+    public var maxPackLooks = 5
 
     public init(text: GameText) { self.text = text }
 
@@ -91,6 +96,13 @@ public struct Coach: Sendable {
                 state.activity = .running(turn)
                 return []
             case .done(let answer, let session):
+                if turn.sawScreen, case .decision(let decision) = turn.purpose, decision.needsScreenshot, answer.contains(Prompt.packNotReady) {
+                    // The session isn't kept, so this look leaves no trace in the conversation.
+                    state.packLooks += 1
+                    state.activity = .idle
+                    if state.packLooks < maxPackLooks { return capture(turn.purpose, after: packRetryDelay, &state) }
+                    return start(turn.purpose, packUnseen: true, &state)
+                }
                 var record = state.runs[key]!
                 record.head = session
                 record.transcript.append(Exchange(title: turn.purpose.title, advice: answer, isQuestion: turn.purpose.isQuestion, sawScreen: turn.sawScreen))
@@ -122,7 +134,10 @@ public struct Coach: Sendable {
                 (state.activity, state.retryable, state.problem) = (.idle, nil, nil)
                 return [.save(record)]
             }
-            if decision.needsScreenshot { return capture(purpose, after: packSettleDelay, &state) }
+            state.packLooks = 0
+            if case .openPack(_, from: let source) = decision.kind {
+                return capture(purpose, after: source == .shop ? packSettleDelay : tagPackSettleDelay, &state)
+            }
         }
         return start(purpose, &state)
     }
@@ -134,11 +149,11 @@ public struct Coach: Sendable {
     }
 
     private func start(
-        _ purpose: CoachState.Purpose, screenshot: Data? = nil, screenshotFailed: Bool = false, _ state: inout CoachState
+        _ purpose: CoachState.Purpose, screenshot: Data? = nil, screenshotFailed: Bool = false, packUnseen: Bool = false, _ state: inout CoachState
     ) -> [CoachEffect] {
         guard let key = state.current, let record = state.runs[key] else { return [] }
         let text = switch purpose {
-        case .decision(let decision): screenshotFailed ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
+        case .decision(let decision): screenshotFailed || packUnseen ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
         }
         let id = TurnID(state.takeID())
@@ -167,6 +182,7 @@ public struct CoachState: Sendable {
     var retryable: Purpose?
     var problem: Problem?
     var standing: CoachView.Standing?
+    var packLooks = 0
     var nextID = 0
 
     /// Starts from what `RunStore` saved. No in-flight state survives a restart, by design.
@@ -180,7 +196,10 @@ public struct CoachState: Sendable {
         switch activity {
         case .idle: (status, partial, sawScreen) = (current == nil ? .waitingForRun : .ready, "", false)
         case .capturing: (status, partial, sawScreen) = (.lookingAtPack, "", true)
-        case .running(let turn): (status, partial, sawScreen) = (turn.partial.isEmpty ? .thinking : .answering, turn.partial, turn.sawScreen)
+        case .running(let turn):
+            // "PACK_NOT" is the start of asking for another look, not advice to show.
+            let text = Prompt.packNotReady.hasPrefix(turn.partial) ? "" : turn.partial
+            (status, partial, sawScreen) = (text.isEmpty ? .thinking : .answering, text, turn.sawScreen)
         }
         let canRetry = retryable != nil && activity.isIdle
         if let decision = activity.purpose?.decision {
