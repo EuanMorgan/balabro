@@ -1,3 +1,5 @@
+<img src="docs/logo.png" alt="Balabro logo" width="160" align="right">
+
 # Balabro
 
 Balabro is a small macOS panel that sits over Balatro and coaches you through your run with Claude. Each time you draw a hand, visit the shop, open a pack or reach a blind select, it tells you what to do first, then why, then a short lesson.

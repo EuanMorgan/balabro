@@ -14,6 +14,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Balabro" "$app/Contents/MacOS/Balabro"
 sed "s/__VERSION__/$version/g" "$root/Packaging/Info.plist" > "$app/Contents/Info.plist"
+cp "$root/Packaging/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 
 # Ad-hoc, because there is no Developer ID. Gatekeeper blocks the download until the user clicks
 # Open Anyway in Privacy & Security, as the README explains.

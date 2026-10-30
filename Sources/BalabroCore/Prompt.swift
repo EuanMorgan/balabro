@@ -32,6 +32,8 @@ enum Prompt {
         - Joker text has placeholders like #1#. Fill them from the joker's live values in [brackets].
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
+        - You get the new game state automatically after every move, so never ask the player to send or show you the \
+        new hand.
         - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
         player opens it.
         - If a booster pack's cards are not in the screenshot, or there is no screenshot, ask the player to list them.
