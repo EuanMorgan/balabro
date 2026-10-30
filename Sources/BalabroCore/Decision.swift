@@ -42,9 +42,9 @@ public struct Decision: Sendable, Hashable {
     /// 3. A pack phase -> `.openPack(.skipTag)`. When a pack closes, the next held pack tag fires, and the save
     ///    that follows (`button_callbacks.lua:2623`) is written in the new pack's state with that tag already gone.
     /// 4. `.selectingHand` -> `.playHand`; `.shop` -> `.shop`; `.blindSelect` -> `.blindSelect`.
-    public static func detect(in snapshot: RunSnapshot, text: GameText) -> Decision? {
+    public static func detect(in snapshot: RunSnapshot, text: GameText, goal: CoachGoal = .win) -> Decision? {
         guard let kind = kind(of: snapshot) else { return nil }
-        let prompt = Prompt.decision(kind, snapshot, text)
+        let prompt = Prompt.decision(kind, snapshot, text, goal: goal)
         return Decision(
             kind: kind, snapshot: snapshot, title: Prompt.title(kind, snapshot, text),
             prompt: prompt, fingerprint: .of(prompt),

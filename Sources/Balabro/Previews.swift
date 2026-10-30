@@ -13,6 +13,7 @@ enum Previews {
             ("waiting", CoachView(status: .waitingForRun, headline: "", advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("streaming", CoachView(status: .answering, headline: "Ante 1 · Big Blind", advice: streaming, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("finished", CoachView(status: .ready, headline: "Ante 1 · Big Blind", chipsNeeded: 450, advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), true, 560, .none),
+            ("naneinf", CoachView(status: .ready, goal: .naneinf, headline: "Ante 26 · The Serpent", chipsNeeded: 3e184, advice: naneinf, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .none),
             ("update", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false), false, 420, .available(release)),
             ("follow-up", CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false), false, 520, .none),
         ]
@@ -67,6 +68,15 @@ enum Previews {
         lesson: Advice.Lesson(number: 3, title: "Two Pair is a draw, not a finish",
                               body: "Early in a blind, keep the pairs and throw the rest. You have hands to spare."),
         rest: "")
+
+    private static let naneinf = Advice(
+        doNow: ["Play K♠."],
+        score: [
+            .init(label: "High Card", sum: .init(chips: "1.2e150", mult: "3.5e157", total: "naneinf")),
+            .init(label: "Instead: Pair of Kings", sum: .init(chips: "2.1e60", mult: "1.5e80", total: "3.2e140"), isAlternative: true),
+        ],
+        why: ["Every King held multiplies the mult, so the played hand hardly matters."],
+        lesson: nil, rest: "")
 
     private static let release = AppRelease(
         version: AppVersion("0.2.0")!,

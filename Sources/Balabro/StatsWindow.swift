@@ -114,7 +114,8 @@ struct StatsView: View {
     }
 
     private func score(_ value: Double) -> String {
-        value.isFinite && value < 1e15 ? Int(value).formatted() : String(format: "%.3e", value)
+        guard value.isFinite else { return "naneinf" }
+        return value < 1e15 ? Int(value).formatted() : String(format: "%.3e", value)
     }
 }
 

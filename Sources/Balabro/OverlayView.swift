@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// ```
 /// ┌───────────────────────────────┐
-/// │ Ante 3 · Big Blind          ↻●│  headline in the pixel font, refresh, status dot
+/// │ Ante 3 · Big Blind         ∞↻●│  headline in the pixel font, naneinf switch, refresh, status dot
 /// │ Do this now  Saw your screen  │  chip-blue label, and whether the coach looked at the screen
 /// │ 1 Discard J♦ 4♠ 3♥ 2♥         │  large, numbered, red/blue suit glyphs
 /// │ 2 Play Q-Q-6-6                │
@@ -26,7 +26,7 @@ struct OverlayView: View {
     let updater: Updater?
 
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, adviseNextRun: runtime.adviseNextRun, update: updater?.status ?? .none, install: {
+        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, refresh: runtime.refresh, adviseNextRun: runtime.adviseNextRun, setGoal: runtime.setGoal, update: updater?.status ?? .none, install: {
             Task { if await updater?.install() == true { NSApp.terminate(nil) } }
         }, screenAccess: ScreenAccess.isGranted)
     }
@@ -38,6 +38,7 @@ struct OverlayContent: View {
     let retry: () -> Void
     var refresh: () -> Void = {}
     var adviseNextRun: () -> Void = {}
+    var setGoal: (CoachGoal) -> Void = { _ in }
     var update = Updater.Status.none
     var install: () -> Void = {}
     var screenAccess = true
@@ -120,6 +121,18 @@ struct OverlayContent: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+            Button {
+                setGoal(view.goal == .naneinf ? .win : .naneinf)
+            } label: {
+                Image(systemName: "infinity")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(view.goal == .naneinf ? Theme.money : Theme.muted)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(view.goal == .naneinf ? "Chasing naneinf. Click to go back to coaching for the win" : "Chase naneinf: coach for the biggest score the game can show")
+            .accessibilityLabel("Chase naneinf")
+            .accessibilityValue(view.goal == .naneinf ? "On" : "Off")
             if view.status != .waitingForRun {
                 Button(action: refresh) {
                     Image(systemName: "arrow.clockwise")

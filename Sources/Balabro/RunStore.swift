@@ -14,7 +14,7 @@ struct RunStore: Sendable {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }.compactMap { file in
             do {
-                return try JSONDecoder().decode(RunRecord.self, from: Data(contentsOf: file))
+                return try RunRecord(json: Data(contentsOf: file))
             } catch {
                 Logger.balabro.error("Skipping unreadable run \(file.lastPathComponent, privacy: .public): \(error)")
                 return nil
@@ -26,7 +26,7 @@ struct RunStore: Sendable {
     func playedRuns() -> [PlayedRun] {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension == "json" }.compactMap { file -> PlayedRun? in
-            guard let data = try? Data(contentsOf: file), let summary = (try? JSONDecoder().decode(RunRecord.self, from: data))?.summary else { return nil }
+            guard let data = try? Data(contentsOf: file), let summary = (try? RunRecord(json: data))?.summary else { return nil }
             return PlayedRun(id: file.lastPathComponent, summary: summary, lastPlayed: StatsData.modified(file))
         }
         .sorted { $0.lastPlayed > $1.lastPlayed }
@@ -34,9 +34,7 @@ struct RunStore: Sendable {
 
     func save(_ record: RunRecord) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        try encoder.encode(record).write(to: directory.appending(path: "\(record.key).json"), options: .atomic)
+        try record.json().write(to: directory.appending(path: "\(record.key).json"), options: .atomic)
     }
 }
 

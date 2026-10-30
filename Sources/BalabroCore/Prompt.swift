@@ -96,6 +96,15 @@ enum Prompt {
         one of the pack's cards whole, because they haven't appeared or are still dissolving into view, reply with exactly \
         \(packNotReady) and nothing else, even if you can read some of them. You'll get a new screenshot.
         - If there's no screenshot, ask the player to list the pack's cards.
+        - When a state starts with "GOAL: naneinf", the player is playing for the biggest score the game can show, as well \
+        as to win. A score past about 1.8e308 overflows, and the game shows it as naneinf. One hand has to get there. After \
+        Ante 8 the player chooses Endless Mode and the blinds keep rising. Ante 39's target overflows too and no score can \
+        beat it, so it has to happen before then. Still clear every blind, because a lost run reaches nothing. Build what \
+        multiplies: XMult from cards held in hand, and retriggers of them. +Chips and +Mult stop mattering. The usual route \
+        is Baron and Mime, with Kings held in hand, Steel cards, Red Seals, more hand size, and Blueprint and Brainstorm \
+        copying them. The hand played then hardly matters. Other routes exist, so follow what the run offers, and say so \
+        when the build can't get there. Write big numbers like "1.2e40 x 3.5e12 = 4.2e52", and write a total past 1.8e308 \
+        as naneinf. When the state's best hand is naneinf, the goal is reached, so tell the player once.
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \
@@ -115,8 +124,8 @@ enum Prompt {
 
     static let rulesVersion = Fingerprint.of(system)
 
-    static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText) -> String {
-        var lines: [String] = []
+    static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText, goal: CoachGoal = .win) -> String {
+        var lines = goal == .naneinf ? ["GOAL: naneinf. Best hand this run: \(chips(s.bestHandScore))."] : []
         switch kind {
         case .playHand:
             lines.append("DECISION: play or discard")
@@ -178,13 +187,15 @@ enum Prompt {
             """
     }
 
-    static func nextRun(_ progress: PlayerProgress, _ text: GameText) -> String {
+    static func nextRun(_ progress: PlayerProgress, _ text: GameText, goal: CoachGoal = .win) -> String {
         let career = progress.career
         var lines = [
             "DECISION: which deck and stake to start the next run with. The player picks both on the New Run screen.",
             "Answer with one step naming the deck and stake, such as \"Start a run with the Blue Deck on Red Stake.\", then the Goal and the Why. "
-                + "Leave out the Score block. Only name a deck and stake listed below as available. Pick what will teach this player the most "
-                + "while still being winnable for them, such as a stake up after a win, a deck that suits how they play, or something easier after a run of losses.",
+                + "Leave out the Score block. Only name a deck and stake listed below as available. " + (goal == .naneinf
+                    ? "The player wants to score naneinf, so pick what gives that the best chance. Higher stakes only make it harder, and the Plasma Deck helps because it balances chips and mult."
+                    : "Pick what will teach this player the most "
+                        + "while still being winnable for them, such as a stake up after a win, a deck that suits how they play, or something easier after a run of losses."),
             "Record: \(career.wins) wins, \(career.losses) losses. Best hand \(chips(career.bestHand)). Furthest ante \(career.furthestAnte).",
         ]
         if !career.hands.isEmpty { lines.append("Most played hands: " + career.hands.prefix(4).map { "\($0.name) (\($0.count))" }.joined(separator: ", ")) }
@@ -206,6 +217,16 @@ enum Prompt {
         }
         return lines.joined(separator: "\n")
     }
+
+    static let keepGoing = """
+        **Do this now:**
+        1. Choose Endless Mode.
+
+        **Goal:** Score naneinf before Ante 39
+
+        **Why:**
+        - Winning doesn't have to end the run, and Endless Mode is where a score can get that big.
+        """
 
     static let refresh = """
         THE PLAYER PRESSED REFRESH because the steps on screen look wrong or out of date. Look at the attached screenshot \
@@ -385,7 +406,7 @@ enum Prompt {
 
     /// Matches the game's `number_format` (`misc_functions.lua:956`), so a score reads the same as on screen.
     static func chips(_ n: Double) -> String {
-        guard n.isFinite else { return "infinite" }
+        guard n.isFinite else { return "naneinf" }
         guard n >= 1e11 else { return Int(n).formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))) }
         let exponent = Int(log10(n).rounded(.down))
         return String(format: "%.3fe%d", n / pow(10, Double(exponent)), exponent)

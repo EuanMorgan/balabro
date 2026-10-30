@@ -137,4 +137,20 @@ struct AdviceTests {
         #expect(line("lots").outcome(chipsNeeded: 2000) == nil)
         #expect(Advice.ScoreLine(label: "Pair: about 60").outcome(chipsNeeded: 2000) == nil)
     }
+
+    @Test func scoreLinesHandleNumbersUpToNaneinf() {
+        let a = Advice(markdown: """
+            **Score:**
+            - High Card: 1.2e150 x 3.5e157 = naneinf
+            - Instead, Pair of Kings: 2.5e+40 x 4e12 = 1e53
+            """)
+        #expect(a.score == [
+            .init(label: "High Card", sum: .init(chips: "1.2e150", mult: "3.5e157", total: "naneinf")),
+            .init(label: "Instead: Pair of Kings", sum: .init(chips: "2.5e+40", mult: "4e12", total: "1e53"), isAlternative: true),
+        ])
+        #expect(a.score[0].outcome(chipsNeeded: 1e288) == .clears)
+        #expect(a.score[1].outcome(chipsNeeded: 3e53) == .leaves("2.000e53"))
+        // Ante 39's target overflows to nan, and the game can't beat it with any score.
+        #expect(a.score[0].outcome(chipsNeeded: .nan) == .leaves("naneinf"))
+    }
 }

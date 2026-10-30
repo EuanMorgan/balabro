@@ -741,4 +741,76 @@ struct CoachTests {
         #expect(starts(coach.reduce(&state, .saveWritten(try snap("04-round-eval")))).isEmpty)
         #expect(state.view.status == .ready)
     }
+
+    func saveHoldingABestHandOfNaneinf() throws -> RunSnapshot {
+        let text = Fixture.saveText("02-hand").replacingOccurrences(of: #"["hand"]={["amt"]=0,"#, with: #"["hand"]={["amt"]=inf,"#)
+        return try SaveFile.decode(Data(text.utf8), profile: 1)
+    }
+
+    @Test func switchingGoalRedoesTheCurrentDecision() throws {
+        var state = CoachState(restoring: [])
+        let first = try #require(starts(coach.reduce(&state, .saveWritten(try snap("02-hand")))).first)
+        #expect(first.message.text.hasPrefix("DECISION: play or discard"))
+
+        let on = coach.reduce(&state, .setGoal(.naneinf))
+        #expect(on.contains(.cancelTurn(first.id)))
+        #expect(try #require(starts(on).first).message.text.hasPrefix("GOAL: naneinf. Best hand this run: 0.\nDECISION: play or discard"))
+        #expect(state.view.goal == .naneinf)
+        #expect(coach.reduce(&state, .setGoal(.naneinf)).isEmpty)
+
+        let off = coach.reduce(&state, .setGoal(.win))
+        #expect(try #require(starts(off).first).message.text.hasPrefix("DECISION: play or discard"))
+    }
+
+    @Test func switchingGoalWaitsForAQuestion() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+        let question = try #require(starts(coach.reduce(&state, .ask("why?", withScreenshot: false))).first)
+
+        #expect(coach.reduce(&state, .setGoal(.naneinf)).isEmpty)
+        let after = coach.reduce(&state, .turnOutput(question.id, .done("Because.", SessionID(rawValue: "S1"))))
+        #expect(try #require(starts(after).first).message.text.hasPrefix("GOAL: naneinf."))
+    }
+
+    @Test func aRestartOnTheSameGoalDoesNotCoachTheSameDecisionAgain() throws {
+        var state = CoachState(restoring: [], goal: .naneinf)
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        let done = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
+        let record = try #require(done.compactMap { if case .save(let r) = $0 { r } else { nil } }.first)
+
+        var restarted = CoachState(restoring: [record], goal: .naneinf)
+        #expect(starts(coach.reduce(&restarted, .saveWritten(try snap("02-hand")))).isEmpty)
+    }
+
+    @Test func aWinWhileChasingNaneinfPointsToEndlessMode() throws {
+        var state = CoachState(restoring: [], goal: .naneinf)
+        #expect(actions(coach.reduce(&state, .saveWritten(try wonSave()))) == [.readProgress(after: coach.progressSettleDelay)])
+        #expect(starts(coach.reduce(&state, .progressRead(progress))).isEmpty)
+        #expect(state.view.headline == "You won")
+        #expect(state.view.advice?.doNow == ["Choose Endless Mode."])
+    }
+
+    @Test func switchingGoalRedoesTheNextRunAdvice() throws {
+        var state = CoachState(restoring: [])
+        let advice = try #require(starts(coach.reduce(&state, .progressRead(progress))).first)
+        #expect(!advice.message.text.contains("naneinf"))
+
+        #expect(coach.reduce(&state, .setGoal(.naneinf)) == [.cancelTurn(advice.id), .readProgress(after: .zero)])
+        let redone = try #require(starts(coach.reduce(&state, .progressRead(progress))).first)
+        #expect(redone.message.text.contains("The player wants to score naneinf"))
+
+        _ = coach.reduce(&state, .turnOutput(redone.id, .done("**Do this now:**\n1. Start.", SessionID(rawValue: "N"))))
+        #expect(coach.reduce(&state, .setGoal(.win)) == [.readProgress(after: .zero)])
+        #expect(state.view.advice == nil)
+    }
+
+    @Test func aRunWithABestHandOfNaneinfKeepsSaving() throws {
+        var state = CoachState(restoring: [], goal: .naneinf)
+        let effects = coach.reduce(&state, .saveWritten(try saveHoldingABestHandOfNaneinf()))
+        #expect(try #require(starts(effects).first).message.text.hasPrefix("GOAL: naneinf. Best hand this run: naneinf."))
+
+        let record = try #require(effects.compactMap { if case .save(let r) = $0 { r } else { nil } }.first)
+        #expect(try RunRecord(json: record.json()).summary?.bestHand == .infinity)
+    }
 }

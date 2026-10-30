@@ -32,6 +32,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 5. To let the coach see the cards in a booster pack, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach asks you to list the cards instead. Above the steps, the panel says whether the coach used your screen or only your save.
 6. If the steps ever look wrong or out of date, click the **refresh arrow** at the top of the panel. The coach looks at the screen again and gives new steps.
 7. When a run ends, the coach suggests which deck and stake to play next, based on your wins and what you have unlocked. With no run going, click **What should I play next?** to ask.
+8. To chase naneinf, the score so big that it overflows the game, click the **infinity sign** at the top of the panel. It turns gold, and the coach plays for the biggest possible score and takes you into Endless Mode after a win. It stays on across runs until you click it again.
 
 To see how you play over time, click the Balabro icon in the menu bar and choose **Your stats**. All-time totals come from the game's own profile. Run-by-run history starts when you first play with this version.
 

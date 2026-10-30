@@ -38,7 +38,7 @@ public struct Advice: Sendable, Equatable {
 
         /// What this hand does to the blind, given the score still needed. nil when the total isn't a number.
         public func outcome(chipsNeeded: Double) -> Outcome? {
-            guard let total = sum.flatMap({ Double($0.total.replacing(",", with: "")) }) else { return nil }
+            guard let total = sum.flatMap({ $0.total == "naneinf" ? .infinity : Double($0.total.replacing(",", with: "")) }) else { return nil }
             return total >= chipsNeeded ? .clears : .leaves(Prompt.chips(chipsNeeded - total))
         }
 
@@ -50,7 +50,7 @@ public struct Advice: Sendable, Equatable {
             var text = line.replacing("**", with: "")
             let isAlternative = text.lowercased().hasPrefix("instead")
             if isAlternative { text = "Instead: " + text.dropFirst("instead".count).drop { ",: ".contains($0) } }
-            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+)\s*[x×]\s*([\d,.]+)\s*(?:=|≈|~=|~)\s*([\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
+            guard let match = text.wholeMatch(of: /(.*?)[:\s]*([\d,.]+(?:e\+?\d+)?)\s*[x×]\s*([\d,.]+(?:e\+?\d+)?)\s*(?:=|≈|~=|~)\s*(naneinf|[\d,]+(?:\.\d+)?(?:e\+?\d+)?)\.?/) else {
                 self.init(label: text, isAlternative: isAlternative)
                 return
             }

@@ -19,8 +19,11 @@ final class CoachRuntime {
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
     @ObservationIgnored private var savesRoot: URL?
 
+    private static let goalKey = "goal"
+
     init(coach: Coach, store: RunStore, claude: ClaudeInvocation?) {
-        let state = CoachState(restoring: store.loadAll())
+        let goal = UserDefaults.standard.string(forKey: Self.goalKey).flatMap(CoachGoal.init) ?? .win
+        let state = CoachState(restoring: store.loadAll(), goal: goal)
         (self.coach, self.store, self.claude, self.state, self.view) = (coach, store, claude, state, state.view)
     }
 
@@ -35,6 +38,10 @@ final class CoachRuntime {
     func retry() { send(.retry) }
     func refresh() { send(.refresh) }
     func adviseNextRun() { send(.adviseNextRun) }
+    func setGoal(_ goal: CoachGoal) {
+        UserDefaults.standard.set(goal.rawValue, forKey: Self.goalKey)
+        send(.setGoal(goal))
+    }
 
     private func send(_ event: CoachEvent) {
         let effects = coach.reduce(&state, event)

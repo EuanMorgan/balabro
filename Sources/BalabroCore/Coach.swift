@@ -49,16 +49,10 @@ public struct Coach: Sendable {
             case .noRun, .saveUnreadable: state.problem = nil
             default: break
             }
-            guard let decision = Decision.detect(in: snapshot, text: text),
-                  decision.fingerprint != state.newestFingerprint else {
+            guard let decision = decision(in: snapshot, state), decision.fingerprint != state.newestFingerprint else {
                 return justWon ? effects + [.readProgress(after: progressSettleDelay)] : effects
             }
-            if state.activity.purpose?.isQuestion == true {
-                state.waitingDecision = decision
-                return effects
-            }
-            if case .running(let turn) = state.activity { effects.append(.cancelTurn(turn.id)) }
-            return effects + begin(.decision(decision), &state)
+            return effects + consider(decision, &state)
 
         // The game deletes save.jkr on game over and when a new run replaces it.
         case .saveRemoved(let profile):
@@ -145,8 +139,20 @@ public struct Coach: Sendable {
                 return []
             }
             let effects: [CoachEffect] = if case .running(let turn) = state.activity { [.cancelTurn(turn.id)] } else { [] }
-            let decision = state.latestSnapshot.flatMap { Decision.detect(in: $0, text: text) }
-            return effects + begin(.refresh(decision), &state)
+            return effects + begin(.refresh(state.latestSnapshot.flatMap { decision(in: $0, state) }), &state)
+
+        case .setGoal(let goal):
+            guard goal != state.goal else { return [] }
+            state.goal = goal
+            if let decision = state.latestSnapshot.flatMap({ decision(in: $0, state) }) { return consider(decision, &state) }
+            // Advice on the next run depends on the goal, and nothing else is on screen to redo.
+            if case .running(let turn) = state.activity, case .nextRun = turn.purpose {
+                state.activity = .idle
+                return [.cancelTurn(turn.id), .readProgress(after: .zero)]
+            }
+            guard state.nextRun != nil else { return [] }
+            state.nextRun = nil
+            return [.readProgress(after: .zero)]
 
         case .adviseNextRun:
             guard case .idle = state.activity, state.current == nil else { return [] }
@@ -157,8 +163,26 @@ public struct Coach: Sendable {
             guard case .idle = state.activity, let progress else { return [] }
             let onWinScreen = state.latestSnapshot.map { $0.won && Decision.detect(in: $0, text: text) == nil } ?? false
             guard state.current == nil || onWinScreen else { return [] }
-            return begin(.nextRun(prompt: Prompt.nextRun(progress, text)), &state)
+            if onWinScreen, state.goal == .naneinf, let key = state.current, var record = state.runs[key] {
+                record.transcript.append(Exchange(title: "You won", advice: Prompt.keepGoing))
+                state.runs[key] = record
+                return [.save(record)]
+            }
+            return begin(.nextRun(prompt: Prompt.nextRun(progress, text, goal: state.goal)), &state)
         }
+    }
+
+    private func decision(in snapshot: RunSnapshot, _ state: CoachState) -> Decision? {
+        Decision.detect(in: snapshot, text: text, goal: state.goal)
+    }
+
+    private func consider(_ decision: Decision, _ state: inout CoachState) -> [CoachEffect] {
+        if state.activity.purpose?.isQuestion == true {
+            state.waitingDecision = decision
+            return []
+        }
+        let effects: [CoachEffect] = if case .running(let turn) = state.activity { [.cancelTurn(turn.id)] } else { [] }
+        return effects + begin(.decision(decision), &state)
     }
 
     private func begin(_ purpose: CoachState.Purpose, _ state: inout CoachState) -> [CoachEffect] {
@@ -235,12 +259,14 @@ public struct CoachState: Sendable {
     var latestSnapshot: RunSnapshot?
     /// Claude's advice on the next run, until a decision or question replaces it.
     var nextRun: String?
+    var goal: CoachGoal
     var packLooks = 0
     var nextID = 0
 
     /// Starts from what `RunStore` saved. No in-flight state survives a restart, by design.
-    public init(restoring records: [RunRecord]) {
+    public init(restoring records: [RunRecord], goal: CoachGoal = .win) {
         runs = Dictionary(records.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        self.goal = goal
     }
 
     /// Everything the overlay draws. Derived, never stored, so it can't drift from the state.
@@ -257,12 +283,12 @@ public struct CoachState: Sendable {
         let canRetry = retryable != nil && activity.isIdle
         if let purpose = activity.purpose, !purpose.isQuestion {
             return CoachView(
-                status: status, headline: purpose.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? purpose.waitingKind : nil,
+                status: status, goal: goal, headline: purpose.title, chipsNeeded: chipsNeeded, waitingOn: partial.isEmpty ? purpose.waitingKind : nil,
                 advice: partial.isEmpty ? nil : Advice(markdown: partial), sawScreen: sawScreen, thread: [],
                 queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
         if let nextRun {
-            return CoachView(status: status, headline: Purpose.nextRunTitle, advice: Advice(markdown: nextRun), thread: [], queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
+            return CoachView(status: status, goal: goal, headline: Purpose.nextRunTitle, advice: Advice(markdown: nextRun), thread: [], queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
         }
         let history = current.flatMap { runs[$0] }?.transcript ?? []
         let planIndex = history.lastIndex { !$0.isQuestion }
@@ -273,6 +299,7 @@ public struct CoachState: Sendable {
         }
         return CoachView(
             status: status,
+            goal: goal,
             headline: planIndex.map { history[$0].title } ?? (current == nil ? "Start or continue a run" : "Waiting for your next move"),
             chipsNeeded: chipsNeeded, advice: plan, sawScreen: planIndex.map { history[$0].sawScreen } ?? false, thread: thread, queuedQuestion: queuedQuestion, problem: problem, canRetry: canRetry)
     }
@@ -377,6 +404,12 @@ public enum CoachEvent: Sendable {
     case refresh
     case adviseNextRun
     case progressRead(PlayerProgress?)
+    case setGoal(CoachGoal)
+}
+
+/// What the coach plays for. It lasts across runs, because reaching naneinf usually takes many.
+public enum CoachGoal: String, Sendable {
+    case win, naneinf
 }
 
 public enum CoachEffect: Sendable, Hashable {
@@ -433,6 +466,22 @@ public struct RunRecord: Sendable, Hashable, Codable {
     public var rules: Fingerprint?
 }
 
+extension RunRecord {
+    /// JSON has no infinity, and a best hand of naneinf is one.
+    public func json() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        return try encoder.encode(self)
+    }
+
+    public init(json: Data) throws {
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        self = try decoder.decode(RunRecord.self, from: json)
+    }
+}
+
 public struct Exchange: Sendable, Hashable, Codable {
     public var title: String     // "Ante 3 · Big Blind", or the player's question
     public var advice: String    // Claude's markdown, verbatim
@@ -467,6 +516,7 @@ public struct CoachView: Sendable, Equatable {
         case ready
     }
     public var status: Status
+    public var goal: CoachGoal
     public var headline: String
     /// What's left to score in this blind, from the newest save. nil outside a hand.
     public var chipsNeeded: Double?
@@ -482,7 +532,8 @@ public struct CoachView: Sendable, Equatable {
     public var problem: Problem?
     public var canRetry: Bool
 
-    public init(status: Status, headline: String, chipsNeeded: Double? = nil, waitingOn: Decision.Kind? = nil, advice: Advice?, sawScreen: Bool = false, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+    public init(status: Status, goal: CoachGoal = .win, headline: String, chipsNeeded: Double? = nil, waitingOn: Decision.Kind? = nil, advice: Advice?, sawScreen: Bool = false, thread: [FollowUp], queuedQuestion: String?, problem: Problem?, canRetry: Bool) {
+        self.goal = goal
         (self.status, self.headline, self.chipsNeeded, self.waitingOn, self.advice, self.sawScreen, self.thread) = (status, headline, chipsNeeded, waitingOn, advice, sawScreen, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
     }
