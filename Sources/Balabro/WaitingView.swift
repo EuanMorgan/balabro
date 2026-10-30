@@ -69,58 +69,69 @@ private struct ScoreTally: View {
         // Dies down just before the numbers reset, so the loop doesn't cut off a full flame.
         let heat = min(1, max(0, (progress - 0.15) / 0.45)) * min(1, (1 - progress) / 0.08)
         HStack(spacing: 8) {
-            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep, tip: Color(hex: 0x9BDCFF), time: time, heat: heat, fade: fade)
+            tile("\(chips)", face: Theme.chips, lip: Theme.chipsDeep, core: Color(hex: 0x9BDCFF), time: time, heat: heat, fade: fade)
             Text("×").font(.system(size: 20, weight: .heavy)).foregroundStyle(Theme.mult)
-            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep, tip: Theme.money, time: time + 40, heat: heat, fade: fade)
+            tile("\(mult)", face: Theme.mult, lip: Theme.multDeep, core: Theme.money, time: time + 40, heat: heat, fade: fade)
                 .scaleEffect(pulse)
         }
     }
 
-    private func tile(_ number: String, face: Color, lip: Color, tip: Color, time: Double, heat: Double, fade: Double) -> some View {
+    private func tile(_ number: String, face: Color, lip: Color, core: Color, time: Double, heat: Double, fade: Double) -> some View {
         Text(number)
             .font(Theme.pixelFont(3))
             .foregroundStyle(.white.opacity(fade))
             .frame(width: 72, height: 44)
             .background(ChipTile(face: face, lip: lip))
             .background(alignment: .bottom) {
-                PixelFlames(base: face, tip: tip, time: time, heat: heat)
-                    .frame(width: 88, height: 44 + PixelFlames.reach)
+                PixelFlames(flame: face, core: core, time: time, heat: heat)
+                    .frame(width: 72, height: 44 + PixelFlames.reach)
             }
     }
 }
 
-/// Columns of square pixels rising behind a tile. Three sine waves moving at different speeds keep the
-/// outline from looking like it repeats.
+/// Square pixels of fire behind a tile. A rising field, bent by a few sine waves so the tongues lick and break
+/// off, is cut against an outline that's tallest in the middle. Solid colours, as in the game.
 private struct PixelFlames: View {
-    let base: Color
-    let tip: Color
+    let flame: Color
+    let core: Color
     let time: Double
     let heat: Double
-    static let reach = 42.0
+    static let reach = 48.0
     private static let pixel = 3.0
 
     var body: some View {
         Canvas { context, size in
             guard heat > 0 else { return }
             let columns = Int(size.width / Self.pixel)
+            var outer = Path()
+            var inner = Path()
             for column in 0..<columns {
-                let x = Double(column)
-                let slow: Double = 0.4 * sin(x * 0.23 + time * 3.1)
-                let fast: Double = 0.6 * sin(x * 1.3 - time * 7.3)
-                let wave: Double = sin(x * 0.55 + time * 5) + fast + slow
-                let flicker: Double = pow((wave + 2) / 4, 1.3)
-                let taper: Double = pow(sin((x + 0.5) / Double(columns) * .pi), 0.7)
-                let height: Double = heat * taper * (0.25 + 0.75 * flicker) * Self.reach
-                let rows = Int(height / Self.pixel + 0.5)
-                for row in 0..<max(rows, 0) {
-                    let rise = Double(row + 1) / Double(max(rows, 1))
-                    let colour = rise < 0.5 ? base : tip
-                    let rect = CGRect(x: x * Self.pixel, y: size.height - 41 - Double(row + 1) * Self.pixel, width: Self.pixel, height: Self.pixel)
-                    context.fill(Path(rect), with: .color(colour.opacity(1 - 0.55 * rise)))
+                let x = (Double(column) + 0.5) / Double(columns) * 2 - 1
+                for row in 0...Int(Self.reach / Self.pixel) {
+                    let top = Double(row) * Self.pixel
+                    let fuel = fuel(x: x, rise: (Self.reach - top - Self.pixel) / Self.reach)
+                    guard fuel > 0 else { continue }
+                    let rect = CGRect(x: Double(column) * Self.pixel, y: top, width: Self.pixel, height: Self.pixel)
+                    if fuel > 0.5 { inner.addRect(rect) } else { outer.addRect(rect) }
                 }
             }
+            context.fill(outer, with: .color(flame))
+            context.fill(inner, with: .color(core))
         }
         .allowsHitTesting(false)
+    }
+
+    /// Above zero means fire. `rise` is 0 at the top of the tile and 1 at the flames' full reach.
+    private func fuel(x: Double, rise: Double) -> Double {
+        var u = x * 2.2
+        var v = rise * 2.2 - time * 2.4
+        for _ in 0..<3 {
+            let bend = 0.55 * sin(v * 1.6 + time * 0.7)
+            v += 0.55 * sin(u * 1.9 - time * 0.5)
+            u += bend
+        }
+        let outline = heat * (1 - x * x) * 0.7
+        return outline - rise + 0.35 * sin(u * 3.1) * sin(v * 1.9)
     }
 }
 
