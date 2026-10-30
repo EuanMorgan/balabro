@@ -21,6 +21,8 @@ Balabro reads the save file the game already writes, so it needs no mods and cha
 3. Open `Balabro.app`. The app isn't notarised by Apple, so macOS blocks it the first time.
 4. Open **System Settings > Privacy & Security**, scroll to the message about Balabro, and click **Open Anyway**.
 
+To update, click **Update** when the panel says a new version is available. Balabro restarts and carries on with your run. macOS may ask for Screen Recording permission again afterwards. To update from a terminal instead, run `/Applications/Balabro.app/Contents/MacOS/Balabro --update`.
+
 ## Play with it
 
 1. Open Balabro. The panel appears, and a Balabro icon appears in the menu bar.

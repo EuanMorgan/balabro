@@ -20,8 +20,12 @@ import SwiftUI
 /// ```
 struct OverlayView: View {
     let runtime: CoachRuntime
+    let updater: Updater?
+
     var body: some View {
-        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry)
+        OverlayContent(view: runtime.view, ask: runtime.ask, retry: runtime.retry, update: updater?.status ?? .none) {
+            Task { if await updater?.install() == true { NSApp.terminate(nil) } }
+        }
     }
 }
 
@@ -29,6 +33,8 @@ struct OverlayContent: View {
     let view: CoachView
     let ask: (_ question: String, _ withScreenshot: Bool) -> Void
     let retry: () -> Void
+    var update = Updater.Status.none
+    var install: () -> Void = {}
     var showWhy = false
 
     var body: some View {
@@ -68,6 +74,8 @@ struct OverlayContent: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
             }
+            UpdateRow(status: update, install: install)
+                .padding(.horizontal, 16)
             QuestionField(onSubmit: ask)
                 .padding(10)
         }
@@ -177,6 +185,34 @@ struct AdviceView: View {
             }
         }
         .textSelection(.enabled)
+    }
+}
+
+private struct UpdateRow: View {
+    let status: Updater.Status
+    let install: () -> Void
+
+    var body: some View {
+        switch status {
+        case .none:
+            EmptyView()
+        case .available(let release):
+            row("Version \(release.version) is available") { ChipButton("Update", action: install) }
+        case .installing(let release):
+            row("Updating to \(release.version)…") { EmptyView() }
+        case .failed(let release):
+            row("Couldn't update") { ChipButton("Download") { NSWorkspace.shared.open(release.page) } }
+        }
+    }
+
+    private func row(_ message: String, @ViewBuilder action: () -> some View) -> some View {
+        HStack(spacing: 8) {
+            Text(message)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.muted)
+            Spacer(minLength: 0)
+            action()
+        }
     }
 }
 
@@ -349,15 +385,7 @@ private struct ProblemBanner: View {
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            if canRetry {
-                Button("Retry", action: retry)
-                    .buttonStyle(.plain)
-                    .font(Theme.pixelFont(1))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(ChipTile())
-            }
+            if canRetry { ChipButton("Retry", action: retry) }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.mult.opacity(0.85)))
@@ -377,6 +405,23 @@ private struct ProblemBanner: View {
         case .turnFailed(.exited(let status, let tail)): "Claude stopped with status \(status). \(tail.suffix(160))"
         case .turnFailed(.malformedOutput): "Claude's reply couldn't be read."
         }
+    }
+}
+
+private struct ChipButton: View {
+    let title: String
+    let action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) { (self.title, self.action) = (title, action) }
+
+    var body: some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(Theme.pixelFont(1))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(ChipTile())
     }
 }
 

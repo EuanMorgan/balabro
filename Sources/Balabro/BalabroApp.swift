@@ -6,6 +6,8 @@ import BalabroCore
 @main
 @MainActor
 enum BalabroApp {
+    static let updateFlag = "--update"
+
     static func main() async {
         // A claude process that dies before reading stdin must fail the write, not kill the app.
         signal(SIGPIPE, SIG_IGN)
@@ -15,6 +17,9 @@ enum BalabroApp {
         }
         if arguments.contains("--locate-claude") {
             exit(await locateClaude())
+        }
+        if arguments.contains(updateFlag) {
+            exit(await update())
         }
         #if DEBUG
         if let directory = value(after: "--render-previews", in: arguments) {
@@ -65,6 +70,24 @@ enum BalabroApp {
         }
     }
 
+    private static func update() async -> Int32 {
+        guard let updater = Updater() else {
+            print("Only a packaged Balabro.app can update itself.")
+            return 1
+        }
+        await updater.check()
+        guard case .available(let release) = updater.status else {
+            print("Up to date.")
+            return 0
+        }
+        print("Updating to \(release.version)")
+        guard await updater.install() else {
+            print("Update failed.")
+            return 1
+        }
+        return 0
+    }
+
     private static func locateClaude() async -> Int32 {
         guard let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: AppDelegate.conversations) else {
             print("claude not found")
@@ -85,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: OverlayPanel?
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem?
+    private let updater = Updater()
 
     init(savesRoot: URL) { self.savesRoot = savesRoot }
 
@@ -99,11 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: Self.conversations)
 
         let runtime = CoachRuntime(coach: Coach(text: text), store: .default, claude: claude)
-        let overlay = OverlayPanel(runtime: runtime)
+        let overlay = OverlayPanel(runtime: runtime, updater: updater)
         overlay.orderFrontRegardless()
         (self.runtime, self.overlay) = (runtime, overlay)
         hotKey = HotKey(HotKey.default) { overlay.focusQuestionField() }
         statusItem = makeStatusItem()
+        if let updater { Task { await updater.watch() } }
         await runtime.start(watching: savesRoot)
     }
 

@@ -64,6 +64,8 @@ let effects = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard"
 
 **Follow-ups.** A question doesn't replace the advice. `CoachState.view` takes the newest decision's answer as the plan and shows every question since then under it, so the next decision clears them. A reply is plain text. Only a reply that changes what to do adds a `**Do this now:**` block, which replaces the plan's steps and reasons. The steps stay pinned at the top of the panel, and everything under them scrolls.
 
+**Updates.** `Updater` reads GitHub's release list at launch and every 6 hours, because `/releases/latest` leaves out pre-releases. A release counts only if it has `Balabro-<version>.zip` attached. Clicking **Update** downloads the zip, checks the bundle id, the version and the signature, swaps the app and reopens it once the old process has exited. Being offline shows nothing. A failed install offers the release page instead.
+
 **Booster packs.** A `.openPack` decision returns `.captureGameWindow(id, after: 1.8 s)` instead of starting a turn. The shell captures the largest Balatro window (bundle `com.Balatro.localthunk`) with ScreenCaptureKit, scales it so the long edge is at most 1568 px, and sends it back as `.screenshot(id, png:)`. The turn then carries the PNG as a base64 image block in the stream-json stdin line, so it needs no tool and no temp file. If Screen Recording is denied, the turn still runs, with text telling Claude to ask the player to list the cards, and the overlay shows a permission banner. A follow-up can also attach a screenshot.
 
 **The CLI command line** (`ClaudeInvocation`, pure and tested):
