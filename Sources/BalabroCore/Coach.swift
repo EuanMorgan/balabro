@@ -34,6 +34,11 @@ public struct Coach: Sendable {
             if key != state.current {
                 effects += state.abandonActivity()
                 state.current = key
+                (state.prediction, state.scoreNote) = (nil, nil)
+            }
+            if let prediction = state.prediction, case .settled(let note) = prediction.check(snapshot) {
+                state.prediction = nil
+                if let note { state.scoreNote = note }
             }
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
             let justWon = snapshot.won && record.summary?.won != true
@@ -112,6 +117,12 @@ public struct Coach: Sendable {
                     if state.packLooks < maxPackLooks { return capture(turn.purpose, after: packRetryDelay, &state) }
                     return start(turn.purpose, packUnseen: true, &state)
                 }
+                if let decision = turn.purpose.decision {
+                    state.prediction = ScorePrediction(advice: answer, at: decision.snapshot)
+                } else if let snapshot = state.latestSnapshot, let prediction = ScorePrediction(advice: answer, at: snapshot) {
+                    state.prediction = prediction
+                }
+                state.scoreNote = nil
                 var record = state.runs[key]!
                 record.head = session
                 record.rules = Prompt.rulesVersion
@@ -230,11 +241,12 @@ public struct Coach: Sendable {
         // The next run's advice is a conversation of its own, because it isn't part of the run just played.
         let conversation = if case .nextRun = purpose { RunRecord?.none } else { record }
         let rules = conversation?.head != nil && conversation?.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
+        let note = conversation != nil ? state.scoreNote.map { $0 + "\n\n" } ?? "" : ""
         let id = TurnID(state.takeID())
         state.activity = .running(.init(id: id, purpose: purpose, partial: "", sawScreen: screenshot != nil))
         state.retryable = nil
         state.problem = screenshotFailed ? .screenRecordingDenied : nil
-        return [.startTurn(TurnRequest(id: id, forkFrom: conversation?.head, message: UserMessage(text: rules + text, screenshotPNG: screenshot)))]
+        return [.startTurn(TurnRequest(id: id, forkFrom: conversation?.head, message: UserMessage(text: rules + note + text, screenshotPNG: screenshot)))]
     }
 
     private func startNext(_ state: inout CoachState) -> [CoachEffect] {
@@ -256,6 +268,10 @@ public struct CoachState: Sendable {
     var retryable: Purpose?
     var problem: Problem?
     var chipsNeeded: Double?
+    /// The score the last steps gave for the hand they play, until a save shows what it really scored.
+    var prediction: ScorePrediction?
+    /// Set when that score was wrong. Goes with every turn until one completes, so a cancelled turn doesn't lose it.
+    var scoreNote: String?
     var latestSnapshot: RunSnapshot?
     /// Claude's advice on the next run, until a decision or question replaces it.
     var nextRun: String?

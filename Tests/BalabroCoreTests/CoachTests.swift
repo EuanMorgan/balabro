@@ -742,6 +742,35 @@ struct CoachTests {
         #expect(state.view.status == .ready)
     }
 
+    /// Fixture 10 plays a High Card that scores 15 in fixture 11. Returns what the shop's turn is told.
+    func shopMessageAfterPlaying(_ scoreLine: String) throws -> String {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play K♥.\n\n**Score:**\n- \(scoreLine)", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .saveWritten(try snap("11-round-eval")))
+        return try #require(sentMessages(coach.reduce(&state, .saveWritten(try snap("12-shop")))).first)
+    }
+
+    @Test func aWrongScoreIsPointedOutInTheNextTurn() throws {
+        #expect(try shopMessageAfterPlaying("High Card: 20 x 3 = 60").contains("said 20 x 3 = 60. It scored 15."))
+    }
+
+    @Test(arguments: ["High Card: 15 x 1 = 15", "Pair of Kings: 20 x 3 = 60", "High Card, if you draw it: 20 x 3 = 60"])
+    func noCheckWhenTheScoreWasRightOrThatHandWasNotPlayed(scoreLine: String) throws {
+        #expect(try !shopMessageAfterPlaying(scoreLine).contains("SCORE CHECK"))
+    }
+
+    @Test func theScoreCheckIsSentOnce() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Score:**\n- High Card: 20 x 3 = 60", SessionID(rawValue: "S0"))))
+        _ = coach.reduce(&state, .saveWritten(try snap("11-round-eval")))
+        _ = coach.reduce(&state, .saveWritten(try snap("12-shop")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("advice", SessionID(rawValue: "S1"))))
+        let next = sentMessages(coach.reduce(&state, .ask("why?", withScreenshot: false)))
+        #expect(next.count == 1 && !next[0].contains("SCORE CHECK"))
+    }
+
     func saveHoldingABestHandOfNaneinf() throws -> RunSnapshot {
         let text = Fixture.saveText("02-hand").replacingOccurrences(of: #"["hand"]={["amt"]=0,"#, with: #"["hand"]={["amt"]=inf,"#)
         return try SaveFile.decode(Data(text.utf8), profile: 1)
