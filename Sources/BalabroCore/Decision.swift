@@ -11,7 +11,7 @@ public struct Decision: Sendable, Hashable {
         case playHand
         case shop
         case blindSelect
-        /// The save can't show the cards, so this decision needs a screenshot before it can be coached.
+        /// The save can't show the cards, so this decision needs the scorer's reload or a screenshot before it can be coached.
         case openPack(BoosterPack, from: PackSource)
     }
     public enum PackSource: Sendable, Hashable { case shop, skipTag(TagKey) }
@@ -31,11 +31,13 @@ public struct Decision: Sendable, Hashable {
         if case .openPack = kind { true } else { false }
     }
 
-    /// A blind select has no sums, and a tag's pack isn't in the save, so reloading it wouldn't show that pack.
+    /// A blind select has no sums. Reloading a blind-select save fires its tag and deals the same pack, but a save
+    /// written in a pack's own state has neither the cards nor anything to deal them again.
     var canBeScored: Bool {
         switch kind {
         case .playHand, .shop, .openPack(_, from: .shop): true
-        case .blindSelect, .openPack(_, from: .skipTag): false
+        case .openPack(_, from: .skipTag): snapshot.phase == .blindSelect
+        case .blindSelect: false
         }
     }
 

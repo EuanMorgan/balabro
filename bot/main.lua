@@ -85,7 +85,7 @@ local function next_request()
     end
     if newest then
       local parts = split(newest)
-      if parts[1] == "score" then return tonumber(parts[2]), parts[3] end
+      if parts[1] == "score" then return tonumber(parts[2]), parts[3], parts[4] end
     end
     coroutine.yield()
   end

@@ -444,6 +444,20 @@ function world.load_save(path)
   G.FUNCS.start_run(nil, { savetext = STR_UNPACK(love.data.decompress("string", "deflate", data)) })
 end
 
+-- A joker roll that lands on a locked joker rolls again, so a pack only deals the player's cards with the player's unlocks.
+-- The file lists every unlocked joker, including the starting ones. If it's empty or half written, the last unlocks stand.
+function world.match_unlocks(meta_path)
+  local file = io.open(meta_path, "rb")
+  if not file then return end
+  local data = file:read("*a")
+  file:close()
+  local ok, meta = pcall(function() return STR_UNPACK(love.data.decompress("string", "deflate", data)) end)
+  if not ok or type(meta) ~= "table" or type(meta.unlocked) ~= "table" or not next(meta.unlocked) then return end
+  for key, center in pairs(G.P_CENTERS) do
+    if key:find("^j_") then center.unlocked = meta.unlocked[key] == true end
+  end
+end
+
 -- The game's clock is capped per frame, so a slow idle loop costs nothing once frames speed up again.
 function world.set_idle(idle) G.FPS_CAP = idle and 4 or 500 end
 

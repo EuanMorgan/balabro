@@ -105,7 +105,12 @@ enum Prompt {
         - Keep a running plan for the run (the hand type to build, the jokers to look for). Mention it only when it changes.
         - \(jokerTextRule)
         - The state already includes everything the game shows on hover, such as this round's rank for Mail-In Rebate. \
-        Never tell the player to hover over or check something. If you truly can't tell, give the step for each case.
+        Never tell the player to hover over or check something, except for an unnamed joker as described next. If you truly \
+        can't tell, give the step for each case.
+        - Never name a joker, a voucher or an edition from its art, because no name is printed and the art is easy to \
+        misread. Use the names in the state and the pack's card list, or a tooltip you can read in a screenshot. If a pack's \
+        joker isn't named, say so, call it by its position, ask the player to hover over it and tell you its name, and \
+        don't tell them to sell, take or skip anything until you know it.
         - The deck is given as counts because the draw order is hidden. Face-down cards are hidden from the player \
         and from you. Never guess at either.
         - Jokers and vouchers have no name printed on them, and the game hides the name and text of any the player \
@@ -119,22 +124,23 @@ enum Prompt {
         leftmost joker without an edition into that edition and make it free, or stay held if there's no such joker. \
         The Coupon Tag makes the shop's first cards and packs free. The D6 Tag starts rerolls at $0. Treat these as \
         already done.
-        - You can see the game only through the state, plus a screenshot when an open pack needs one or the player \
-        attaches one. Never tell the player to look at, check or confirm anything on screen.
+        - You can see the game only through the state, an open pack's list of cards, a screenshot when that list is missing, \
+        and a screenshot with each of the player's questions. Never tell the player to look at, check or confirm anything on screen.
         - You get the new game state automatically after every move, so never ask the player to send or show you the \
         new hand.
         - Tarot, Planet and Spectral cards in an open pack can only be used on the spot or skipped. They can't be kept \
         for later, so never tell the player to take one into a consumable slot. Only cards bought in the shop go there. \
         A joker from a pack needs a free joker slot.
-        - When you suggest buying a pack, don't ask what's inside. You get a screenshot of its cards as soon as the \
-        player opens it.
+        - When you suggest buying a pack, don't ask what's inside. You get its cards as soon as the player opens it.
         - A screenshot can be taken before a pack finishes opening. If a pack decision's screenshot doesn't show every \
         one of the pack's cards whole, because they haven't appeared or are still dissolving into view, reply with exactly \
         \(packNotReady) and nothing else, even if you can read some of them. You'll get a new screenshot.
-        - If there's no screenshot, ask the player to list the pack's cards.
+        - If there's no list of a pack's cards and no screenshot, ask the player to list them.
         - \(naneinfRule)
         - When the player asks a question, they read your reply under the steps you already gave. Answer it directly \
         in one to three short sentences of plain text, with no heading, no Why and no lesson. Don't repeat the steps.
+        - Taking or selling cards inside an open pack writes no save. So when a question's screenshot disagrees with the state \
+        about what the player holds or what's left in the pack, believe the screenshot.
         - Only if your answer changes what the player should do, follow it with a **Do this now:** block with the \
         complete new steps, then a **Score:** block at a play or discard decision, then a **Goal:** line and a **Why:** block. These replace the steps on screen.
         """
@@ -171,9 +177,9 @@ enum Prompt {
         case .openPack(let pack, let source):
             lines.append("DECISION: pick from a \(packName(pack)) (\(pack.cardsShown) cards, choose \(pack.picks))")
             switch source {
-            case .shop: lines.append("Bought in the shop. The cards are in the attached screenshot of the game.")
+            case .shop: lines.append("Bought in the shop.")
             case .skipTag(let tag):
-                lines.append("Opened by the \(name(tag, text)) from skipping a blind. The cards are in the attached screenshot of the game.")
+                lines.append("Opened by the \(name(tag, text)) from skipping a blind.")
             }
             lines.append("Ante \(s.ante). $\(s.dollars).")
             if !s.hand.isEmpty { lines.append("Hand (left to right): " + s.hand.map(card).joined(separator: " ")) }
@@ -268,6 +274,12 @@ enum Prompt {
         the screenshot, because the save can lag behind the game. If a pack's cards aren't all whole yet, reply with exactly \
         \(packNotReady) and nothing else.
         """
+
+    static func packCards(_ cards: [ShopItem.Card], _ s: RunSnapshot, _ text: GameText) -> String {
+        (["The pack's cards, left to right, read from the game:"] + cards.enumerated().map { "\($0 + 1). \(describe($1, s, text))" }).joined(separator: "\n")
+    }
+
+    static let packUnnamed = "The cards are in the attached screenshot of the game. The game couldn't name them."
 
     static let screenshotMissing = """
         The screenshot of the game could not be taken, so you can't see the screen. \

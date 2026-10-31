@@ -75,10 +75,12 @@ enum BalabroApp {
             print("Only a packaged Balabro.app with Balatro installed can score a save.")
             return 1
         }
-        guard let facts = await scorer.score(save: save, within: .seconds(60)) else {
+        let answer = await scorer.score(save: save, unlocks: save.deletingLastPathComponent().appending(path: "meta.jkr"), within: .seconds(60))
+        guard let facts = answer.facts else {
             print("Nothing to work out, or the scorer failed.")
             return 1
         }
+        if !answer.packCards.isEmpty { print(answer.packCards) }
         print(facts)
         return 0
     }

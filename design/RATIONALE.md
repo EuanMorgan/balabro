@@ -7,7 +7,7 @@ Balabro watches the player's Balatro run through the game's own `save.jkr` and c
 - `save_run()` only queues a save. The save thread writes at most every 5 s on macOS (`globals.lua:52`), or sooner when the game stage changes, and it keeps only the newest queued table. So writes get merged, and the app can start partway through a run. Any rule that works out a decision by comparing a save with the one before it breaks.
 - The write isn't atomic (`love.filesystem.write`), so a read can catch half a file.
 - Balatro has no run ID. The seed, deck and stake are the closest thing, and a player can replay a seed.
-- The save shows that a shop pack is opening (`ACTION={type="use_card",card=<sort_id>}`) but never shows the cards in it. Packs from skip tags leave no trace beyond the tag itself.
+- The save shows that a shop pack is opening (`ACTION={type="use_card",card=<sort_id>}`) but never shows the cards in it. Packs from skip tags leave no trace beyond the tag itself. Reloading either save in the scorer's copy deals the same cards, because the save holds the random state.
 - The save holds things the player can't see: the deck's draw order and the faces of face-down cards. Coaching on those would be cheating.
 - The CLI keeps the conversation. A turn killed halfway must not leave that conversation in a broken state.
 - A Finder-launched app has neither `~/.local/bin` on PATH nor the `CLAUDE_CONFIG_DIR` the user sets in `~/.zshrc`.
@@ -32,7 +32,7 @@ private func send(_ event: CoachEvent) {
 }
 
 // The overlay's question box and the global shortcut:
-runtime.ask("why keep the 6?", withScreenshot: false)
+runtime.ask("why keep the 6?")
 ```
 
 The test's view. Policy is checked with real saves and no mocks:
@@ -72,7 +72,11 @@ let effects = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard"
 
 **Updates.** `Updater` reads GitHub's release list at launch and every 6 hours, because `/releases/latest` leaves out pre-releases. A release counts only if it has `Balabro-<version>.zip` attached. Clicking **Update** downloads the zip, checks the bundle id, the version and the signature, swaps the app and reopens it once the old process has exited. Being offline shows nothing. A failed install offers the release page instead.
 
-**Booster packs.** A `.openPack` decision returns `.captureGameWindow(id, after:)` instead of starting a turn, after 1.8 s for a shop pack and 3.5 s for a skip tag's. If that screenshot comes before the pack is up, Claude replies `PACK_NOT_READY`, the session is dropped and the app looks again, up to 5 times, because the save can't say and the moving background hides it from the pixels. The shell captures the largest Balatro window (bundle `com.Balatro.localthunk`) with ScreenCaptureKit, scales it so the long edge is at most 1568 px, and sends it back as `.screenshot(id, png:)`. The turn then carries the PNG as a base64 image block in the stream-json stdin line, so it needs no tool and no temp file. If Screen Recording is denied, the turn still runs, with text telling Claude to ask the player to list the cards, and the overlay shows a permission banner. A follow-up can also attach a screenshot.
+**Booster packs.** An `.openPack` decision first asks the scorer to reload the save, which deals the pack the player is looking at. The scorer writes those cards to a save, `SaveFile.decodePackCards` reads them, and the coach gets them as a list with their names, editions and text. Claude can't be trusted to name a joker from its art: no name is printed, and on seed `1QB6WL43` it read Clever Joker as Card Sharp and Flash Card as Abstract Joker, which cost the player a joker. The copy has to use the player's unlocks from `meta.jkr`, because a joker roll that lands on a locked joker rolls again. With every joker unlocked, 11 of 40 reloaded packs showed a joker the player hasn't unlocked. A pack waits up to 40 s for this, because a cold start of the copy takes about 28 s. A second held tag's pack can't be reloaded, because its save is written in the pack's own state.
+
+When the reload gives nothing, the decision falls back to a screenshot, after 1.8 s for a shop pack and 3.5 s for a skip tag's. If that screenshot comes before the pack is up, Claude replies `PACK_NOT_READY`, the session is dropped and the app looks again, up to 5 times, because the save can't say and the moving background hides it from the pixels. The coach is told the cards have no names and that it must ask the player to hover over a joker rather than guess. The shell captures the largest Balatro window (bundle `com.Balatro.localthunk`) with ScreenCaptureKit, scales it so the long edge is at most 1568 px, and sends it back as `.screenshot(id, png:)`. The turn then carries the PNG as a base64 image block in the stream-json stdin line, so it needs no tool and no temp file. If Screen Recording is denied, the turn still runs, with text telling Claude to ask the player to list the cards, and the overlay shows a permission banner.
+
+**Questions look at the screen.** Every question takes a screenshot, including one that waited in the queue or is being retried, at about 1,300 tokens a time. Taking or selling a card inside a pack writes no save, so the screen is the only way to know what the player has done. Claude has no tools, so it can't ask for a look halfway through an answer.
 
 **The CLI command line** (`ClaudeInvocation`, pure and tested):
 `-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --model claude-opus-5-5 --system-prompt <coach prompt> --tools "" --strict-mcp-config --setting-sources "" --disable-slash-commands [--resume <head> --fork-session]`.

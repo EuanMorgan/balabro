@@ -25,6 +25,8 @@ public struct Coach: Sendable {
     public var progressSettleDelay: Duration = .seconds(6)
     /// How long a decision waits for exact scores before the coach does the sums itself. nil means there's no scorer.
     public var scoreWait: Duration?
+    /// A pack waits longer, because without the reload its jokers have no names. A cold start of the scorer takes about 28 s.
+    public var packScoreWait: Duration = .seconds(40)
 
     public init(text: GameText, scoreWait: Duration? = nil) { (self.text, self.scoreWait) = (text, scoreWait) }
 
@@ -82,16 +84,17 @@ public struct Coach: Sendable {
             state.problem = .saveUnreadable(error)
             return []
 
-        case .scored(let id, let facts):
+        case .scored(let id, let facts, let packCards):
             guard case .scoring(id, let decision) = state.activity else { return [] }
             state.exactScores = facts
+            state.packCards = packCards
             return afterScoring(decision, &state)
 
         case .screenshot(let id, let png):
             guard case .capturing(id, let purpose) = state.activity else { return [] }
             return start(purpose, screenshot: png, screenshotFailed: png == nil, &state)
 
-        case .ask(let question, let withScreenshot):
+        case .ask(let question):
             guard state.current != nil else {
                 state.problem = .noRun
                 return []
@@ -101,7 +104,7 @@ public struct Coach: Sendable {
                 state.queuedQuestion = [state.queuedQuestion, question].compactMap { $0 }.joined(separator: "\n")
                 return []
             }
-            return withScreenshot ? capture(.question(question), after: .zero, &state) : start(.question(question), &state)
+            return begin(.question(question), &state)
 
         case .turnOutput(let id, let output):
             guard case .running(var turn) = state.activity, turn.id == id else { return [] }
@@ -217,11 +220,11 @@ public struct Coach: Sendable {
                 return [.save(record)]
             }
             state.packLooks = 0
-            state.exactScores = nil
+            (state.exactScores, state.packCards) = (nil, [])
             if let scoreWait, decision.canBeScored {
                 let id = ScoreID(state.takeID())
                 state.activity = .scoring(id, decision)
-                return [.scoreSave(id, profile: decision.snapshot.identity.profile, within: scoreWait)]
+                return [.scoreSave(id, profile: decision.snapshot.identity.profile, within: decision.needsScreenshot ? packScoreWait : scoreWait)]
             }
             return afterScoring(decision, &state)
         }
@@ -230,11 +233,13 @@ public struct Coach: Sendable {
             state.packLooks = 0
             return capture(purpose, after: .zero, &state)
         }
+        // Moves inside a pack write no save, so the screen is the only way to know what the player has done.
+        if case .question = purpose { return capture(purpose, after: .zero, &state) }
         return start(purpose, &state)
     }
 
     private func afterScoring(_ decision: Decision, _ state: inout CoachState) -> [CoachEffect] {
-        if case .openPack(_, from: let source) = decision.kind {
+        if case .openPack(_, from: let source) = decision.kind, state.packCards.isEmpty {
             return capture(.decision(decision), after: source == .shop ? packSettleDelay : tagPackSettleDelay, &state)
         }
         return start(.decision(decision), &state)
@@ -253,7 +258,13 @@ public struct Coach: Sendable {
         if case .nextRun = purpose {} else if record == nil { return [] }
         let text = switch purpose {
         case .decision(let decision):
-            [decision.prompt, state.exactScores, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
+            [
+                decision.prompt,
+                state.packCards.isEmpty ? nil : Prompt.packCards(state.packCards, decision.snapshot, self.text),
+                decision.needsScreenshot && screenshot != nil ? Prompt.packUnnamed : nil,
+                state.exactScores,
+                screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil,
+            ].compactMap { $0 }.joined(separator: "\n\n")
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
         case .refresh(let decision):
             [decision?.prompt, Prompt.refresh, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
@@ -273,7 +284,7 @@ public struct Coach: Sendable {
     private func startNext(_ state: inout CoachState) -> [CoachEffect] {
         if let question = state.queuedQuestion {
             state.queuedQuestion = nil
-            return start(.question(question), &state)
+            return begin(.question(question), &state)
         }
         if let decision = state.waitingDecision { return begin(.decision(decision), &state) }
         return []
@@ -295,6 +306,8 @@ public struct CoachState: Sendable {
     var scoreNote: String?
     /// The scorer's facts for the decision being coached.
     var exactScores: String?
+    /// The open pack's cards, from the scorer's reload. Empty means only a screenshot can show them.
+    var packCards: [ShopItem.Card] = []
     var latestSnapshot: RunSnapshot?
     /// Claude's advice on the next run, until a decision or question replaces it.
     var nextRun: String?
@@ -333,9 +346,9 @@ public struct CoachState: Sendable {
         let history = current.flatMap { runs[$0] }?.transcript ?? []
         let planIndex = history.lastIndex { !$0.isQuestion }
         var plan = planIndex.map { Advice(markdown: history[$0].advice) }
-        var thread = history[(planIndex.map { $0 + 1 } ?? 0)...].map { CoachView.FollowUp(question: $0.title, answer: $0.advice, sawScreen: $0.sawScreen, plan: &plan) }
+        var thread = history[(planIndex.map { $0 + 1 } ?? 0)...].map { CoachView.FollowUp(question: $0.title, answer: $0.advice, plan: &plan) }
         if case .question(let question)? = activity.purpose ?? retryable {
-            thread.append(CoachView.FollowUp(question: question, answer: partial, sawScreen: sawScreen, plan: &plan))
+            thread.append(CoachView.FollowUp(question: question, answer: partial, plan: &plan))
         }
         return CoachView(
             status: status,
@@ -439,9 +452,9 @@ public enum CoachEvent: Sendable {
     case saveWritten(RunSnapshot)
     case saveRemoved(profile: Int)
     case saveUnreadable(profile: Int, SaveFileError)
-    case scored(ScoreID, facts: String?)
+    case scored(ScoreID, facts: String?, packCards: [ShopItem.Card] = [])
     case screenshot(CaptureID, png: Data?)
-    case ask(String, withScreenshot: Bool)
+    case ask(String)
     case turnOutput(TurnID, TurnOutput)
     case retry
     case refresh
@@ -609,14 +622,13 @@ public struct CoachView: Sendable, Equatable {
         public var question: String
         public var reply: String
         public var changedSteps: Bool
-        public var sawScreen: Bool
 
-        public init(question: String, reply: String, changedSteps: Bool, sawScreen: Bool = false) {
-            (self.question, self.reply, self.changedSteps, self.sawScreen) = (question, reply, changedSteps, sawScreen)
+        public init(question: String, reply: String, changedSteps: Bool) {
+            (self.question, self.reply, self.changedSteps) = (question, reply, changedSteps)
         }
 
         /// New steps replace the plan's and take its score, goal and reasons with them, because those belong to the old steps.
-        init(question: String, answer: String, sawScreen: Bool, plan: inout Advice?) {
+        init(question: String, answer: String, plan: inout Advice?) {
             let parsed = Advice(markdown: answer)
             let changedSteps = !parsed.doNow.isEmpty
             if changedSteps {
@@ -626,7 +638,7 @@ public struct CoachView: Sendable, Equatable {
             }
             if let lesson = parsed.lesson { plan?.lesson = lesson }
             let reply = parsed.rest.isEmpty && !changedSteps ? parsed.why.joined(separator: " ") : parsed.rest
-            self.init(question: question, reply: reply, changedSteps: changedSteps, sawScreen: sawScreen)
+            self.init(question: question, reply: reply, changedSteps: changedSteps)
         }
     }
 }

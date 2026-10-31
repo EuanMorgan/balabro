@@ -42,7 +42,7 @@ struct OverlayView: View {
 
 struct OverlayContent: View {
     let view: CoachView
-    let ask: (_ question: String, _ withScreenshot: Bool) -> Void
+    let ask: (_ question: String) -> Void
     let retry: () -> Void
     var refresh: () -> Void = {}
     var adviseNextRun: () -> Void = {}
@@ -85,7 +85,7 @@ struct OverlayContent: View {
                     .padding(.bottom, 6)
             }
             if !screenAccess {
-                NoticeRow(message: "Screen Recording is off, so the coach can't see packs") { ChipButton("Allow", action: ScreenAccess.ask) }
+                NoticeRow(message: "Screen Recording is off, so the coach can't see your screen") { ChipButton("Allow", action: ScreenAccess.ask) }
                     .padding(.horizontal, 16)
             }
             UpdateRow(status: update, install: install)
@@ -342,10 +342,7 @@ private struct FollowUpThread: View {
             Rectangle().fill(Theme.feltRaised).frame(height: 1)
             ForEach(Array(thread.enumerated()), id: \.offset) { index, followUp in
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        if followUp.sawScreen { Image(systemName: "camera.fill").font(.system(size: 10)) }
-                        ColouredText(followUp.question, size: 13, weight: .medium)
-                    }
+                    ColouredText(followUp.question, size: 13, weight: .medium)
                         .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -367,9 +364,8 @@ private struct FollowUpThread: View {
 }
 
 struct QuestionField: View {
-    let onSubmit: (_ question: String, _ withScreenshot: Bool) -> Void
+    let onSubmit: (_ question: String) -> Void
     @State private var question = ""
-    @State private var withScreenshot = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -380,19 +376,9 @@ struct QuestionField: View {
                 .onSubmit {
                     let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
-                    onSubmit(trimmed, withScreenshot)
+                    onSubmit(trimmed)
                     question = ""
-                    withScreenshot = false
                 }
-            Button {
-                withScreenshot.toggle()
-            } label: {
-                Image(systemName: withScreenshot ? "camera.fill" : "camera")
-                    .font(.system(size: 12))
-                    .foregroundStyle(withScreenshot ? Theme.chips : Theme.muted)
-            }
-            .buttonStyle(.plain)
-            .help("Attach a screenshot of the game")
             Text("⌃⌥Space")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.muted.opacity(0.7))

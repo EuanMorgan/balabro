@@ -48,8 +48,8 @@ public enum BotFrame: Sendable, Hashable {
 /// What the scorer says on stdout: the same copy of the game as the bot, in `BALABRO_BOT_MODE=scorer`.
 public enum ScorerFrame: Sendable, Hashable {
     case ready
-    /// nil when the save's moment has nothing to work out.
-    case scored(ScoreID, facts: String?)
+    /// `facts` is nil when the save's moment has nothing to work out. `packFile` is a save holding an open pack's cards.
+    case scored(ScoreID, packFile: URL?, facts: String?)
 
     public init?(line: String) {
         guard line.hasPrefix("@@") else { return nil }
@@ -58,9 +58,9 @@ public enum ScorerFrame: Sendable, Hashable {
         case "ready":
             self = .ready
         case "scored":
-            guard parts.count > 1, let id = Int(parts[1]) else { return nil }
-            let facts = parts.dropFirst(2).joined(separator: "|")
-            self = .scored(ScoreID(id), facts: facts.isEmpty ? nil : facts)
+            guard parts.count > 2, let id = Int(parts[1]) else { return nil }
+            let facts = parts.dropFirst(3).joined(separator: "|")
+            self = .scored(ScoreID(id), packFile: parts[2].isEmpty ? nil : URL(filePath: parts[2]), facts: facts.isEmpty ? nil : facts)
         default:
             return nil
         }

@@ -14,6 +14,14 @@ struct CoachTests {
     func starts(_ effects: [CoachEffect]) -> [TurnRequest] {
         effects.compactMap { if case .startTurn(let r) = $0 { r } else { nil } }
     }
+    /// Performs the screenshot a question asks for, or does nothing if the question was queued.
+    func looking(_ state: inout CoachState, _ effects: [CoachEffect]) -> [CoachEffect] {
+        for case .captureGameWindow(let id, _) in effects { return coach.reduce(&state, .screenshot(id, png: Data([0x89]))) }
+        return effects
+    }
+    func asking(_ state: inout CoachState, _ question: String) -> [CoachEffect] {
+        looking(&state, coach.reduce(&state, .ask(question)))
+    }
 
     @Test func firstHandStartsANewConversation() throws {
         var state = CoachState(restoring: [])
@@ -49,11 +57,11 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("advice", SessionID(rawValue: "S0"))))
-        _ = coach.reduce(&state, .ask("why keep the 6?", withScreenshot: false))
+        _ = asking(&state, "why keep the 6?")
         let during = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
-        #expect(!during.contains(.cancelTurn(TurnID(1))))
+        #expect(!during.contains(.cancelTurn(TurnID(2))))
         #expect(starts(during).isEmpty)
-        let after = coach.reduce(&state, .turnOutput(TurnID(1), .done("because", SessionID(rawValue: "S1"))))
+        let after = coach.reduce(&state, .turnOutput(TurnID(2), .done("because", SessionID(rawValue: "S1"))))
         #expect(starts(after).map(\.forkFrom) == [SessionID(rawValue: "S1")])
     }
 
@@ -88,10 +96,10 @@ struct CoachTests {
     @Test func newestWaitingDecisionWins() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("04-round-eval")))
-        _ = coach.reduce(&state, .ask("what next?", withScreenshot: false))
+        _ = asking(&state, "what next?")
         _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
         _ = coach.reduce(&state, .saveWritten(try snap("06-shop-reroll")))
-        let after = starts(coach.reduce(&state, done(0, "S0")))
+        let after = starts(coach.reduce(&state, done(1, "S0")))
         #expect(after.count == 1)
         #expect(after.first?.message.text.contains("$95.") == true)
     }
@@ -100,19 +108,19 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, done(0, "S0"))
-        _ = coach.reduce(&state, .ask("why keep the 6?", withScreenshot: false))
+        _ = asking(&state, "why keep the 6?")
         _ = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
-        #expect(starts(coach.reduce(&state, .ask("and the 5?", withScreenshot: false))).isEmpty)
-        #expect(starts(coach.reduce(&state, .ask("what about the King?", withScreenshot: false))).isEmpty)
+        #expect(starts(asking(&state, "and the 5?")).isEmpty)
+        #expect(starts(asking(&state, "what about the King?")).isEmpty)
         #expect(state.view.queuedQuestion == "and the 5?\nwhat about the King?")
 
-        let question = starts(coach.reduce(&state, done(1, "S1")))
+        let question = starts(looking(&state, coach.reduce(&state, done(2, "S2"))))
         #expect(question.map(\.message.text) == ["PLAYER QUESTION: and the 5?\nwhat about the King?"])
-        #expect(question.map(\.forkFrom) == [SessionID(rawValue: "S1")])
+        #expect(question.map(\.forkFrom) == [SessionID(rawValue: "S2")])
 
-        let decision = starts(coach.reduce(&state, done(2, "S2")))
+        let decision = starts(coach.reduce(&state, done(4, "S4")))
         #expect(decision.first?.message.text.contains("Hand (left to right): A♣ 8♣ 6♣ 5♥ 3♠ 3♦ 2♠ 2♦") == true)
-        #expect(decision.map(\.forkFrom) == [SessionID(rawValue: "S2")])
+        #expect(decision.map(\.forkFrom) == [SessionID(rawValue: "S4")])
     }
 
     @Test func failedTurnWaitsForRetryAndKeepsTheHead() throws {
@@ -154,7 +162,7 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
         _ = coach.reduce(&state, done(0, "S0"))
-        _ = coach.reduce(&state, .ask("is this pack worth it?", withScreenshot: true))
+        _ = coach.reduce(&state, .ask("is this pack worth it?"))
         #expect(actions(coach.reduce(&state, .saveWritten(try snap("06-shop-reroll")))).isEmpty)
         let question = starts(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89]))))
         #expect(question.map(\.message.text) == ["PLAYER QUESTION: is this pack worth it?"])
@@ -165,18 +173,18 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, done(0, "S0"))
-        _ = coach.reduce(&state, .ask("why keep the 6?", withScreenshot: false))
+        _ = asking(&state, "why keep the 6?")
         _ = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
-        #expect(starts(coach.reduce(&state, .turnOutput(TurnID(1), .failed(.rateLimited(resetsAt: nil))))).isEmpty)
-        #expect(starts(coach.reduce(&state, .retry)).map(\.message.text) == ["PLAYER QUESTION: why keep the 6?"])
-        #expect(starts(coach.reduce(&state, done(2, "S2"))).first?.message.text.contains("discards 3") == true)
+        #expect(starts(coach.reduce(&state, .turnOutput(TurnID(2), .failed(.rateLimited(resetsAt: nil))))).isEmpty)
+        #expect(starts(looking(&state, coach.reduce(&state, .retry))).map(\.message.text) == ["PLAYER QUESTION: why keep the 6?"])
+        #expect(starts(coach.reduce(&state, done(4, "S4"))).first?.message.text.contains("discards 3") == true)
     }
 
-    @Test func questionWithScreenshotCapturesAtOnce() throws {
+    @Test func aQuestionLooksAtTheScreenAtOnce() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
         _ = coach.reduce(&state, done(0, "S0"))
-        #expect(coach.reduce(&state, .ask("is this pack worth it?", withScreenshot: true)) == [.captureGameWindow(CaptureID(1), after: .zero)])
+        #expect(coach.reduce(&state, .ask("is this pack worth it?")) == [.captureGameWindow(CaptureID(1), after: .zero)])
     }
 
     @Test func deletedSaveEndsTheRun() throws {
@@ -184,7 +192,7 @@ struct CoachTests {
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         #expect(actions(coach.reduce(&state, .saveRemoved(profile: 1))) == [.cancelTurn(TurnID(0)), .readProgress(after: coach.progressSettleDelay)])
         #expect(state.view.status == .waitingForRun)
-        #expect(coach.reduce(&state, .ask("hello?", withScreenshot: false)).isEmpty)
+        #expect(asking(&state, "hello?").isEmpty)
         #expect(state.view.problem == .noRun)
     }
 
@@ -215,13 +223,13 @@ struct CoachTests {
 
     @Test func questionRepliesUnderThePlanAndKeepsTheHeadline() throws {
         var state = try stateWithPlan()
-        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
+        _ = asking(&state, "why the 7?")
         #expect(state.view.thread == [.init(question: "why the 7?", reply: "", changedSteps: false)])
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .text("It pairs")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .text("It pairs")))
         #expect(state.view.thread == [.init(question: "why the 7?", reply: "It pairs", changedSteps: false)])
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("It pairs with nothing.", SessionID(rawValue: "S1"))))
-        _ = coach.reduce(&state, .ask("and the King?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Keep it.", SessionID(rawValue: "S2"))))
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("It pairs with nothing.", SessionID(rawValue: "S1"))))
+        _ = asking(&state, "and the King?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(4), .done("Keep it.", SessionID(rawValue: "S2"))))
 
         #expect(state.view.headline == "Ante 1 · bl_small")
         #expect(state.view.advice?.doNow == ["Discard 7♠."])
@@ -234,8 +242,8 @@ struct CoachTests {
 
     @Test func replyWithNewStepsReplacesThePlansStepsAndReasons() throws {
         var state = try stateWithPlan()
-        _ = coach.reduce(&state, .ask("keep the 7?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done(
+        _ = asking(&state, "keep the 7?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done(
             "Yes, I missed the straight.\n\n**Do this now:**\n1. Play 7♠ 6♠ 5♠ 4♠ 3♠.\n\n**Why:**\n- It beats the blind.",
             SessionID(rawValue: "S1"))))
 
@@ -247,8 +255,8 @@ struct CoachTests {
 
     @Test func replyInTheDecisionShapeWithoutNewStepsStillShowsItsReason() throws {
         var state = try stateWithPlan()
-        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("**Why:**\n- No pair.\n- No flush.", SessionID(rawValue: "S1"))))
+        _ = asking(&state, "why the 7?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("**Why:**\n- No pair.\n- No flush.", SessionID(rawValue: "S1"))))
 
         #expect(state.view.advice?.why == ["It pairs with nothing."])
         #expect(state.view.thread == [.init(question: "why the 7?", reply: "No pair. No flush.", changedSteps: false)])
@@ -256,21 +264,21 @@ struct CoachTests {
 
     @Test func nextDecisionClearsTheThread() throws {
         var state = try stateWithPlan()
-        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("No pair.", SessionID(rawValue: "S1"))))
+        _ = asking(&state, "why the 7?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("No pair.", SessionID(rawValue: "S1"))))
         _ = coach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
         #expect(state.view.thread.isEmpty)
         #expect(state.view.advice == nil)
 
-        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S2"))))
+        _ = coach.reduce(&state, .turnOutput(TurnID(3), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S2"))))
         #expect(state.view.thread.isEmpty)
         #expect(state.view.advice?.doNow == ["Play."])
     }
 
     @Test func failedQuestionStaysOnScreenForTheRetry() throws {
         var state = try stateWithPlan()
-        _ = coach.reduce(&state, .ask("why the 7?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .failed(.notLoggedIn)))
+        _ = asking(&state, "why the 7?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .failed(.notLoggedIn)))
         #expect(state.view.thread == [.init(question: "why the 7?", reply: "", changedSteps: false)])
         #expect(state.view.canRetry)
     }
@@ -312,7 +320,7 @@ struct CoachTests {
     @Test func refreshStopsATurnThatIsStillRunning() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
-        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = asking(&state, "why?")
         #expect(actions(coach.reduce(&state, .refresh)) == [.cancelTurn(TurnID(0)), .captureGameWindow(CaptureID(1), after: .zero)])
         #expect(actions(coach.reduce(&state, .turnOutput(TurnID(0), .done("Too late.", SessionID(rawValue: "S0"))))).isEmpty)
     }
@@ -499,10 +507,10 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Discard.\n\n**Goal:** Going for a Straight", SessionID(rawValue: "S0"))))
-        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = asking(&state, "why?")
         _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("Because.", SessionID(rawValue: "S1"))))
         #expect(state.view.advice?.goal == "Going for a Straight")
-        _ = coach.reduce(&state, .ask("flush instead?", withScreenshot: false))
+        _ = asking(&state, "flush instead?")
         _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Yes.\n\n**Do this now:**\n1. Keep hearts.\n\n**Goal:** Going for a Flush", SessionID(rawValue: "S2"))))
         #expect(state.view.advice?.goal == "Going for a Flush")
     }
@@ -513,8 +521,8 @@ struct CoachTests {
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done(
             "**Do this now:**\n1. Play K♥ K♣.\n\n**Score:**\n- Pair: 30 x 2 = 60", SessionID(rawValue: "S0"))))
         #expect(state.view.advice?.score == [.init(label: "Pair", sum: .init(chips: "30", mult: "2", total: "60"))])
-        _ = coach.reduce(&state, .ask("discard instead?", withScreenshot: false))
-        _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("Yes.\n\n**Do this now:**\n1. Discard 7♠.", SessionID(rawValue: "S1"))))
+        _ = asking(&state, "discard instead?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("Yes.\n\n**Do this now:**\n1. Discard 7♠.", SessionID(rawValue: "S1"))))
         #expect(state.view.advice?.score == [])
     }
 
@@ -525,7 +533,7 @@ struct CoachTests {
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .text("**Do")))
         #expect(state.view.waitingOn == nil)
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Leave.", SessionID(rawValue: "S0"))))
-        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = asking(&state, "why?")
         #expect(state.view.waitingOn == nil)
     }
 
@@ -560,15 +568,19 @@ struct CoachTests {
         #expect(state.view.problem == .screenRecordingDenied)
     }
 
-    @Test func followUpSaysWhetherItsReplySawTheScreen() throws {
+    @Test func aQuestionAskedWhileBusyStillLooksAtTheScreen() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
-        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Discard.", SessionID(rawValue: "S0"))))
-        _ = coach.reduce(&state, .ask("what's this?", withScreenshot: true))
-        _ = coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))
-        _ = coach.reduce(&state, .turnOutput(TurnID(2), .done("A joker.", SessionID(rawValue: "S2"))))
-        #expect(state.view.thread == [.init(question: "what's this?", reply: "A joker.", changedSteps: false, sawScreen: true)])
-        #expect(!state.view.sawScreen)
+        _ = coach.reduce(&state, .ask("why?"))
+        #expect(actions(coach.reduce(&state, done(0, "S0"))) == [.captureGameWindow(CaptureID(1), after: .zero)])
+        #expect(starts(coach.reduce(&state, .screenshot(CaptureID(1), png: Data([0x89])))).map(\.message.screenshotPNG) == [Data([0x89])])
+    }
+
+    @Test func aRetriedQuestionLooksAtTheScreenAgain() throws {
+        var state = try stateWithPlan()
+        _ = asking(&state, "why?")
+        _ = coach.reduce(&state, .turnOutput(TurnID(2), .failed(.notLoggedIn)))
+        #expect(actions(coach.reduce(&state, .retry)) == [.captureGameWindow(CaptureID(3), after: .zero)])
     }
 
     func savedSummaries(_ effects: [CoachEffect]) -> [RunSummary?] {
@@ -639,10 +651,10 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("05-shop")))
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("done", SessionID(rawValue: "S0"))))
-        _ = coach.reduce(&state, .ask("why?", withScreenshot: false))
+        _ = asking(&state, "why?")
         _ = coach.reduce(&state, .saveWritten(try bossSelect()))
         #expect(state.view.status == .thinking)
-        let after = coach.reduce(&state, .turnOutput(TurnID(1), .done("because", SessionID(rawValue: "S1"))))
+        let after = coach.reduce(&state, .turnOutput(TurnID(2), .done("because", SessionID(rawValue: "S1"))))
         #expect(starts(after).isEmpty)
         #expect(state.view.advice?.goal == "Beat the Boss Blind")
         #expect(state.view.thread.isEmpty)
@@ -767,7 +779,7 @@ struct CoachTests {
         _ = coach.reduce(&state, .saveWritten(try snap("11-round-eval")))
         _ = coach.reduce(&state, .saveWritten(try snap("12-shop")))
         _ = coach.reduce(&state, .turnOutput(TurnID(1), .done("advice", SessionID(rawValue: "S1"))))
-        let next = sentMessages(coach.reduce(&state, .ask("why?", withScreenshot: false)))
+        let next = sentMessages(asking(&state, "why?"))
         #expect(next.count == 1 && !next[0].contains("SCORE CHECK"))
     }
 
@@ -836,6 +848,43 @@ struct CoachTests {
         #expect(turn.message.text.contains("Score check: adding Joker."))
     }
 
+    func tagPack() throws -> RunSnapshot { try SaveFile.decode(Fixture.save("09-blind-select", holdingTags: ["tag_buffoon"]), profile: 1) }
+    let packOf2: [ShopItem.Card] = [
+        .consumable(Consumable(key: CenterKey(rawValue: "c_mercury"), edition: .negative)),
+        .consumable(Consumable(key: CenterKey(rawValue: "c_saturn"))),
+    ]
+
+    @Test func aTagsPackIsReadFromAReloadAndWaitsLongerForIt() throws {
+        var state = CoachState(restoring: [])
+        let asked = scoringCoach.reduce(&state, .saveWritten(try tagPack()))
+        #expect(asked.contains(.scoreSave(ScoreID(0), profile: 1, within: .seconds(40))))
+    }
+
+    @Test func aPackInItsOwnStateCantBeReloaded() throws {
+        var snapshot = try tagPack()
+        snapshot.phase = .pack(.buffoon)
+        var state = CoachState(restoring: [])
+        #expect(scoreRequests(scoringCoach.reduce(&state, .saveWritten(snapshot))).isEmpty)
+    }
+
+    @Test func aPackWithNamedCardsSkipsTheScreenshot() throws {
+        var state = CoachState(restoring: [])
+        _ = scoringCoach.reduce(&state, .saveWritten(try tagPack()))
+        let turn = try #require(starts(scoringCoach.reduce(&state, .scored(ScoreID(0), facts: "Score check.", packCards: packOf2))).first)
+        #expect(turn.message.screenshotPNG == nil)
+        #expect(turn.message.text.contains("left to right, read from the game:\n1. c_mercury (Negative)\n2. c_saturn\n\nScore check."))
+        #expect(!turn.message.text.contains("screenshot"))
+    }
+
+    @Test func aPackThatCouldntBeNamedSaysSoWithItsScreenshot() throws {
+        var state = CoachState(restoring: [])
+        _ = scoringCoach.reduce(&state, .saveWritten(try tagPack()))
+        let capture = scoringCoach.reduce(&state, .scored(ScoreID(0), facts: nil))
+        #expect(capture == [.captureGameWindow(CaptureID(1), after: .milliseconds(3500))])
+        let turn = try #require(starts(scoringCoach.reduce(&state, .screenshot(CaptureID(1), png: Data([1])))).first)
+        #expect(turn.message.text.hasSuffix("The game couldn't name them."))
+    }
+
     @Test func aBlindSelectHasNothingToScore() throws {
         var state = CoachState(restoring: [])
         let effects = scoringCoach.reduce(&state, .saveWritten(try snap("01-blind-select")))
@@ -874,7 +923,7 @@ struct CoachTests {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
         _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play.", SessionID(rawValue: "S0"))))
-        let question = try #require(starts(coach.reduce(&state, .ask("why?", withScreenshot: false))).first)
+        let question = try #require(starts(asking(&state, "why?")).first)
 
         #expect(coach.reduce(&state, .setGoal(.naneinf)).isEmpty)
         let after = coach.reduce(&state, .turnOutput(question.id, .done("Because.", SessionID(rawValue: "S1"))))

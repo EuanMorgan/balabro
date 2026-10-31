@@ -35,7 +35,7 @@ final class CoachRuntime {
         for await event in SaveWatcher(root: root).events() { send(event) }
     }
 
-    func ask(_ question: String, withScreenshot: Bool) { send(.ask(question, withScreenshot: withScreenshot)) }
+    func ask(_ question: String) { send(.ask(question)) }
     func retry() { send(.retry) }
     func refresh() { send(.refresh) }
     func adviseNextRun() { send(.adviseNextRun) }
@@ -70,7 +70,11 @@ final class CoachRuntime {
                 send(.scored(id, facts: nil))
                 return
             }
-            Task { send(.scored(id, facts: await scorer.score(save: savesRoot.appending(path: "\(profile)/save.jkr"), within: limit))) }
+            Task {
+                let folder = savesRoot.appending(path: "\(profile)")
+                let answer = await scorer.score(save: folder.appending(path: "save.jkr"), unlocks: folder.appending(path: "meta.jkr"), within: limit)
+                send(.scored(id, facts: answer.facts, packCards: answer.packCards))
+            }
         case .captureGameWindow(let id, let delay):
             Task {
                 try? await Task.sleep(for: delay)

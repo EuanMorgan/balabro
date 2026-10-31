@@ -6,7 +6,7 @@ Balabro is a small macOS panel that sits over Balatro and coaches you through yo
 
 ![The Balabro panel showing advice for a hand](docs/overlay.png)
 
-Balabro reads the save file the game already writes, so it needs no mods and changes nothing in the game. When you open a booster pack, it takes a screenshot of the Balatro window, because the save file doesn't include a pack's cards.
+Balabro reads the save file the game already writes, so it needs no mods and changes nothing in the game. The save file doesn't include a booster pack's cards, so Balabro reloads a copy of your save in a hidden copy of the game to read their real names. It takes a screenshot of the Balatro window each time you ask a question, and when a pack's cards can't be read.
 
 ## What you need
 
@@ -29,7 +29,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 2. Drag the panel by its title to a corner of the screen. If it ever gets stuck, click the Balabro icon in the menu bar and choose **Move overlay to the corner**. It stays on top of Balatro, even in fullscreen, and remembers where you put it.
 3. Start or continue a run in Balatro. Advice appears a few seconds after each decision. Balabro keeps a hidden copy of the game open during a run and loads each save into it, so the scores in the advice come from the game's own scoring. It reads a copy of your save, never changes your own, and closes after 10 minutes without a save.
 4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. The reply appears under the steps, and the steps change if the answer changes what to do. Your questions clear at the next decision. Press **Escape** to go back to the game.
-5. To let the coach see the cards in a booster pack, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach asks you to list the cards instead. Above the steps, the panel says whether the coach used your screen or only your save.
+5. To let the coach see your screen when you ask a question, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach answers from your save alone, and asks you to list a pack's cards if it can't read them. Above the steps, the panel says whether the coach used your screen or only your save.
 6. If the steps ever look wrong or out of date, click the **refresh arrow** at the top of the panel. The coach looks at the screen again and gives new steps.
 7. When a run ends, the coach suggests which deck and stake to play next, based on your wins and what you have unlocked. With no run going, click **What should I play next?** to ask.
 8. To chase naneinf, the score so big that it overflows the game, click the **infinity sign** at the top of the panel. It turns gold, and the coach plays for the biggest possible score and takes you into Endless Mode after a win. It stays on across runs until you click it again.
