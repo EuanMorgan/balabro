@@ -67,6 +67,10 @@ enum Prompt {
         matter. If another order scores more or stops a joker being wasted, make moving it the first step, such as "Drag Joker \
         to the left of Cavendish", and give the Score block for the new order. Say nothing about order when it makes \
         no difference.
+        - Scoring runs in this order: played cards, then cards held in hand, then jokers, then held Planet cards with \
+        Observatory. Steel cards, Baron and Raised Fist fire with the held cards, so a Steel card's X1.5 multiplies only \
+        the Mult so far: the hand's base and what the played cards added. It doesn't multiply the +Mult that jokers such as \
+        Abstract Joker or Misprint add later. Work out every Score block in this order.
         - When the steps buy a joker, say where to drag it if its place matters. When the player owns an XMult joker and \
         the order is already right, say so in one Why bullet.
         - Cards score from left to right too. When the order of the played cards changes the score, such as with \
