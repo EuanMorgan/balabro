@@ -106,7 +106,7 @@ local function rehearse(ctx, play, held, order, stand_in)
   return ctx.world.rehearse(ids(play), ids(held), ctx.rng(), order)
 end
 
-local function best_play(hand, ctx, order, stand_in, deadline)
+local function all_plays(hand, ctx, order, stand_in, deadline)
   local results, chancy_seen, memo = {}, false, {}
   local use_memo = #hand > 8
   each_play(hand, function(play, held)
@@ -129,6 +129,11 @@ local function best_play(hand, ctx, order, stand_in, deadline)
     if a.score ~= b.score then return a.score > b.score end
     return #a.play > #b.play
   end)
+  return results, chancy_seen
+end
+
+local function best_play(hand, ctx, order, stand_in, deadline)
+  local results, chancy_seen = all_plays(hand, ctx, order, stand_in, deadline)
   if chancy_seen then
     for i = 1, math.min(5, #results) do
       local total = results[i].score
@@ -269,6 +274,54 @@ function solver.appraise(view, ctx)
     end
     return result
   end)
+end
+
+local REPORT_PLAYS, REPORT_ROLLS = 4, 24
+
+local function measured(option, ctx, order, stand_in)
+  local rolls = option.chancy and REPORT_ROLLS or 1
+  local out = { name = option.name, cards = option.play, chancy = option.chancy, low = math.huge, high = 0 }
+  local total, chips = 0, 0
+  for _ = 1, rolls do
+    local score, _, _, roll_chips = rehearse(ctx, option.play, option.held, order, stand_in)
+    total, chips = total + score, chips + roll_chips
+    out.low, out.high = math.min(out.low, score), math.max(out.high, score)
+  end
+  out.score, out.chips = total / rolls, chips / rolls
+  out.mult = out.chips > 0 and out.score / out.chips or 0
+  return out
+end
+
+-- What a player could work out for themselves with enough time: the best play of each kind and the best discard.
+-- Returns { plays, order, order_score, discard, reach, pace }.
+function solver.report(view, ctx)
+  ctx.rng = new_rng(ctx.seed)
+  local stand_in, deck = {}, shuffled(view.unseen, ctx.rng)
+  local used = 0
+  for _, c in ipairs(view.hand) do
+    if c.face_down then used = used + 1; stand_in[c.id] = deck[used] and deck[used].id end
+  end
+
+  local results = all_plays(view.hand, ctx, nil, stand_in, ctx.now() + PLAY_BUDGET)
+  local plays, kinds = {}, {}
+  for _, option in ipairs(results) do
+    if not kinds[option.name] and #plays < REPORT_PLAYS then
+      kinds[option.name] = true
+      plays[#plays + 1] = measured(option, ctx, nil, stand_in)
+    end
+  end
+  table.sort(plays, function(a, b) return a.score > b.score end)
+
+  local report = { plays = plays, pace = view.need / math.max(view.hands_left, 1) }
+  if results[1] then
+    report.order = better_order(results[1], view, ctx, stand_in)
+    if report.order then report.order_score = measured(results[1], ctx, report.order, stand_in).score end
+  end
+  if view.discards_left > 0 then
+    local pick = best_discard(view, ctx, stand_in, report.pace, ctx.now() + DISCARD_BUDGET)
+    if pick then report.discard, report.reach = pick.discard, pick.reach end
+  end
+  return report
 end
 
 -- Returns { action = "play" | "discard", ids, order, doing, predicted }.

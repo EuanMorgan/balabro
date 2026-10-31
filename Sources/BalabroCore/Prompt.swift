@@ -71,6 +71,11 @@ enum Prompt {
         Observatory. Steel cards, Baron and Raised Fist fire with the held cards, so a Steel card's X1.5 multiplies only \
         the Mult so far: the hand's base and what the played cards added. It doesn't multiply the +Mult that jokers such as \
         Abstract Joker or Misprint add later. Work out every Score block in this order.
+        - If the state ends with EXACT SCORES, those numbers come from the game's own scoring of these cards, so copy them \
+        into the Score block and Why instead of doing the sums. Only work out a hand yourself if it isn't listed. The percent \
+        beside the best discard is how often the next hand reaches that score.
+        - If a shop or pack state ends with "Score check:", its numbers come from the game's own scoring of seven fresh hands. \
+        Use them when you compare jokers. A joker that grows, or pays out later, shows little at first, so read its text too.
         - When the steps buy a joker, say where to drag it if its place matters. When the player owns an XMult joker and \
         the order is already right, say so in one Why bullet.
         - Cards score from left to right too. When the order of the played cards changes the score, such as with \

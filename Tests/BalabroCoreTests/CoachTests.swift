@@ -771,6 +771,85 @@ struct CoachTests {
         #expect(next.count == 1 && !next[0].contains("SCORE CHECK"))
     }
 
+    @Test func missedAndMatchedScoresAreCounted() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Score:**\n- High Card: 20 x 3 = 60", SessionID(rawValue: "S0"))))
+        let missed = coach.reduce(&state, .saveWritten(try snap("11-round-eval")))
+        #expect(savedTallies(missed) == [PredictionTally(matched: 0, missed: 1)])
+
+        state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("10-hand")))
+        _ = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Score:**\n- High Card: 15 x 1 = 15", SessionID(rawValue: "S0"))))
+        let matched = coach.reduce(&state, .saveWritten(try snap("11-round-eval")))
+        #expect(savedTallies(matched) == [PredictionTally(matched: 1, missed: 0)])
+    }
+
+    func savedTallies(_ effects: [CoachEffect]) -> [PredictionTally?] {
+        effects.compactMap { if case .save(let record) = $0 { record.predictions } else { nil } }
+    }
+
+    var scoringCoach: Coach { Coach(text: .missing, scoreWait: .seconds(8)) }
+
+    func scoreRequests(_ effects: [CoachEffect]) -> [ScoreID] {
+        effects.compactMap { if case .scoreSave(let id, _, _) = $0 { id } else { nil } }
+    }
+
+    @Test func aHandWaitsForExactScoresAndTheyGoInThePrompt() throws {
+        var state = CoachState(restoring: [])
+        let asked = scoringCoach.reduce(&state, .saveWritten(try snap("02-hand")))
+        #expect(starts(asked).isEmpty)
+        #expect(asked.contains(.scoreSave(ScoreID(0), profile: 1, within: .seconds(8))))
+        #expect(state.view.status == .thinking)
+        let turn = try #require(starts(scoringCoach.reduce(&state, .scored(ScoreID(0), facts: "EXACT SCORES: Pair is 60."))).first)
+        #expect(turn.message.text.hasSuffix("\n\nEXACT SCORES: Pair is 60."))
+    }
+
+    @Test func theCoachCarriesOnWithoutExactScores() throws {
+        var state = CoachState(restoring: [])
+        _ = scoringCoach.reduce(&state, .saveWritten(try snap("02-hand")))
+        let turn = try #require(starts(scoringCoach.reduce(&state, .scored(ScoreID(0), facts: nil))).first)
+        #expect(!turn.message.text.contains("EXACT SCORES"))
+    }
+
+    @Test func scoresForABoardThatMovedOnAreDropped() throws {
+        var state = CoachState(restoring: [])
+        _ = scoringCoach.reduce(&state, .saveWritten(try snap("02-hand")))
+        let newer = scoringCoach.reduce(&state, .saveWritten(try snap("03-hand-after-discard")))
+        let id = try #require(scoreRequests(newer).first)
+        #expect(id != ScoreID(0))
+        #expect(scoringCoach.reduce(&state, .scored(ScoreID(0), facts: "EXACT SCORES: old")).isEmpty)
+        let turn = try #require(starts(scoringCoach.reduce(&state, .scored(id, facts: "EXACT SCORES: new"))).first)
+        #expect(turn.message.text.contains("EXACT SCORES: new") && !turn.message.text.contains("EXACT SCORES: old"))
+    }
+
+    @Test func aPackIsScoredBeforeItsScreenshot() throws {
+        var state = CoachState(restoring: [])
+        let asked = scoringCoach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        let id = try #require(scoreRequests(asked).first)
+        let next = scoringCoach.reduce(&state, .scored(id, facts: "Score check: adding Joker."))
+        guard case .captureGameWindow(let capture, _)? = next.first else {
+            Issue.record("expected a screenshot, got \(next)")
+            return
+        }
+        let turn = try #require(starts(scoringCoach.reduce(&state, .screenshot(capture, png: Data([1])))).first)
+        #expect(turn.message.text.contains("Score check: adding Joker."))
+    }
+
+    @Test func aBlindSelectHasNothingToScore() throws {
+        var state = CoachState(restoring: [])
+        let effects = scoringCoach.reduce(&state, .saveWritten(try snap("01-blind-select")))
+        #expect(scoreRequests(effects).isEmpty)
+        #expect(starts(effects).count == 1)
+    }
+
+    @Test func aSavePreparesTheScorerSoTheFirstHandIsntLeftWaiting() throws {
+        var state = CoachState(restoring: [])
+        #expect(scoringCoach.reduce(&state, .saveWritten(try snap("01-blind-select"))).contains(.warmScorer))
+        state = CoachState(restoring: [])
+        #expect(!coach.reduce(&state, .saveWritten(try snap("01-blind-select"))).contains(.warmScorer))
+    }
+
     func saveHoldingABestHandOfNaneinf() throws -> RunSnapshot {
         let text = Fixture.saveText("02-hand").replacingOccurrences(of: #"["hand"]={["amt"]=0,"#, with: #"["hand"]={["amt"]=inf,"#)
         return try SaveFile.decode(Data(text.utf8), profile: 1)

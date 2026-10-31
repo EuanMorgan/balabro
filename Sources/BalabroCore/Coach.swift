@@ -23,8 +23,10 @@ public struct Coach: Sendable {
     public var maxPackLooks = 5
     /// The game writes `profile.jkr` at most every 5 s (`F_SAVE_TIMER`), so this waits for a run's result to reach it.
     public var progressSettleDelay: Duration = .seconds(6)
+    /// How long a decision waits for exact scores before the coach does the sums itself. nil means there's no scorer.
+    public var scoreWait: Duration?
 
-    public init(text: GameText) { self.text = text }
+    public init(text: GameText, scoreWait: Duration? = nil) { (self.text, self.scoreWait) = (text, scoreWait) }
 
     public func reduce(_ state: inout CoachState, _ event: CoachEvent) -> [CoachEffect] {
         switch event {
@@ -36,14 +38,16 @@ public struct Coach: Sendable {
                 state.current = key
                 (state.prediction, state.scoreNote) = (nil, nil)
             }
-            if let prediction = state.prediction, case .settled(let note) = prediction.check(snapshot) {
-                state.prediction = nil
-                if let note { state.scoreNote = note }
-            }
             var record = state.runs[key] ?? RunRecord(key: key, progress: snapshot.progress, head: nil, lastCoached: nil, transcript: [])
+            if let outcome = state.prediction?.check(snapshot), outcome != .pending {
+                state.prediction = nil
+                if case .missed(let note) = outcome { state.scoreNote = note }
+                record.predictions = (record.predictions ?? PredictionTally()).counting(outcome)
+            }
             let justWon = snapshot.won && record.summary?.won != true
             record.progress = snapshot.progress
             record.summary = RunSummary(snapshot, previous: record.summary)
+            if scoreWait != nil { effects.append(.warmScorer) }
             state.latestSnapshot = snapshot
             state.chipsNeeded = snapshot.phase == .selectingHand ? snapshot.blind.map { $0.target - snapshot.chipsScored } : nil
             if record != state.runs[key] {
@@ -77,6 +81,11 @@ public struct Coach: Sendable {
         case .saveUnreadable(_, let error):
             state.problem = .saveUnreadable(error)
             return []
+
+        case .scored(let id, let facts):
+            guard case .scoring(id, let decision) = state.activity else { return [] }
+            state.exactScores = facts
+            return afterScoring(decision, &state)
 
         case .screenshot(let id, let png):
             guard case .capturing(id, let purpose) = state.activity else { return [] }
@@ -122,7 +131,7 @@ public struct Coach: Sendable {
                 } else if let snapshot = state.latestSnapshot, let prediction = ScorePrediction(advice: answer, at: snapshot) {
                     state.prediction = prediction
                 }
-                state.scoreNote = nil
+                (state.scoreNote, state.exactScores) = (nil, nil)
                 var record = state.runs[key]!
                 record.head = session
                 record.rules = Prompt.rulesVersion
@@ -208,9 +217,13 @@ public struct Coach: Sendable {
                 return [.save(record)]
             }
             state.packLooks = 0
-            if case .openPack(_, from: let source) = decision.kind {
-                return capture(purpose, after: source == .shop ? packSettleDelay : tagPackSettleDelay, &state)
+            state.exactScores = nil
+            if let scoreWait, decision.canBeScored {
+                let id = ScoreID(state.takeID())
+                state.activity = .scoring(id, decision)
+                return [.scoreSave(id, profile: decision.snapshot.identity.profile, within: scoreWait)]
             }
+            return afterScoring(decision, &state)
         }
         if case .refresh = purpose {
             state.waitingDecision = nil
@@ -218,6 +231,13 @@ public struct Coach: Sendable {
             return capture(purpose, after: .zero, &state)
         }
         return start(purpose, &state)
+    }
+
+    private func afterScoring(_ decision: Decision, _ state: inout CoachState) -> [CoachEffect] {
+        if case .openPack(_, from: let source) = decision.kind {
+            return capture(.decision(decision), after: source == .shop ? packSettleDelay : tagPackSettleDelay, &state)
+        }
+        return start(.decision(decision), &state)
     }
 
     private func capture(_ purpose: CoachState.Purpose, after delay: Duration, _ state: inout CoachState) -> [CoachEffect] {
@@ -232,7 +252,8 @@ public struct Coach: Sendable {
         let record = state.current.flatMap { state.runs[$0] }
         if case .nextRun = purpose {} else if record == nil { return [] }
         let text = switch purpose {
-        case .decision(let decision): screenshotFailed || packUnseen ? decision.prompt + "\n\n" + Prompt.screenshotMissing : decision.prompt
+        case .decision(let decision):
+            [decision.prompt, state.exactScores, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
         case .question(let question): Prompt.question(question, packContentsUnknown: screenshotFailed)
         case .refresh(let decision):
             [decision?.prompt, Prompt.refresh, screenshotFailed || packUnseen ? Prompt.screenshotMissing : nil].compactMap { $0 }.joined(separator: "\n\n")
@@ -272,6 +293,8 @@ public struct CoachState: Sendable {
     var prediction: ScorePrediction?
     /// Set when that score was wrong. Goes with every turn until one completes, so a cancelled turn doesn't lose it.
     var scoreNote: String?
+    /// The scorer's facts for the decision being coached.
+    var exactScores: String?
     var latestSnapshot: RunSnapshot?
     /// Claude's advice on the next run, until a decision or question replaces it.
     var nextRun: String?
@@ -290,6 +313,7 @@ public struct CoachState: Sendable {
         let status: CoachView.Status, partial: String, sawScreen: Bool
         switch activity {
         case .idle: (status, partial, sawScreen) = (current == nil ? .waitingForRun : .ready, "", false)
+        case .scoring: (status, partial, sawScreen) = (.thinking, "", false)
         case .capturing: (status, partial, sawScreen) = (.lookingAtPack, "", true)
         case .running(let turn):
             // "PACK_NOT" is the start of asking for another look, not advice to show.
@@ -351,6 +375,7 @@ public struct CoachState: Sendable {
 
     enum Activity: Sendable {
         case idle
+        case scoring(ScoreID, Decision)
         case capturing(CaptureID, Purpose)
         case running(Turn)
 
@@ -359,6 +384,7 @@ public struct CoachState: Sendable {
         var purpose: Purpose? {
             switch self {
             case .idle: nil
+            case .scoring(_, let decision): .decision(decision)
             case .capturing(_, let purpose): purpose
             case .running(let turn): turn.purpose
             }
@@ -413,6 +439,7 @@ public enum CoachEvent: Sendable {
     case saveWritten(RunSnapshot)
     case saveRemoved(profile: Int)
     case saveUnreadable(profile: Int, SaveFileError)
+    case scored(ScoreID, facts: String?)
     case screenshot(CaptureID, png: Data?)
     case ask(String, withScreenshot: Bool)
     case turnOutput(TurnID, TurnOutput)
@@ -432,12 +459,16 @@ public enum CoachEffect: Sendable, Hashable {
     case startTurn(TurnRequest)
     /// Kill the process. Its forked session is simply never used again.
     case cancelTurn(TurnID)
+    case warmScorer
+    /// Answered by `.scored`, with nil if `within` runs out.
+    case scoreSave(ScoreID, profile: Int, within: Duration)
     case captureGameWindow(CaptureID, after: Duration)
     case readProgress(after: Duration)
     case save(RunRecord)
 }
 
 public struct TurnID: Sendable, Hashable, Codable { public let value: Int; public init(_ value: Int) { self.value = value } }
+public struct ScoreID: Sendable, Hashable { public let value: Int; public init(_ value: Int) { self.value = value } }
 public struct CaptureID: Sendable, Hashable { public let value: Int; public init(_ value: Int) { self.value = value } }
 
 public struct SessionID: RawRepresentable, Sendable, Hashable, Codable {
@@ -480,6 +511,26 @@ public struct RunRecord: Sendable, Hashable, Codable {
     public var summary: RunSummary?
     /// The version of `Prompt.system` this conversation has been told about.
     public var rules: Fingerprint?
+    /// nil for runs from before this was counted.
+    public var predictions: PredictionTally?
+}
+
+/// How the coach's Score lines held up against what the hands really scored.
+public struct PredictionTally: Sendable, Hashable, Codable {
+    public var matched = 0
+    public var missed = 0
+
+    public init(matched: Int = 0, missed: Int = 0) { (self.matched, self.missed) = (matched, missed) }
+
+    func counting(_ outcome: ScorePrediction.Outcome) -> PredictionTally {
+        var tally = self
+        switch outcome {
+        case .matched: tally.matched += 1
+        case .missed: tally.missed += 1
+        case .pending, .uncheckable: break
+        }
+        return tally
+    }
 }
 
 extension RunRecord {

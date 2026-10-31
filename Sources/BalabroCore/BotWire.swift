@@ -45,6 +45,28 @@ public enum BotFrame: Sendable, Hashable {
     }
 }
 
+/// What the scorer says on stdout: the same copy of the game as the bot, in `BALABRO_BOT_MODE=scorer`.
+public enum ScorerFrame: Sendable, Hashable {
+    case ready
+    /// nil when the save's moment has nothing to work out.
+    case scored(ScoreID, facts: String?)
+
+    public init?(line: String) {
+        guard line.hasPrefix("@@") else { return nil }
+        let parts = line.dropFirst(2).split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        switch parts[0] {
+        case "ready":
+            self = .ready
+        case "scored":
+            guard parts.count > 1, let id = Int(parts[1]) else { return nil }
+            let facts = parts.dropFirst(2).joined(separator: "|")
+            self = .scored(ScoreID(id), facts: facts.isEmpty ? nil : facts)
+        default:
+            return nil
+        }
+    }
+}
+
 public struct QuestionID: Sendable, Hashable {
     public let value: Int
     public init(_ value: Int) { self.value = value }

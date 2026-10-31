@@ -62,6 +62,13 @@ struct BotFrameTests {
         #expect(frame == .decide(QuestionID(7), .pack(picks: 2), file: URL(filePath: "/tmp/decision-7.jkr"), brief: "Score check."))
     }
 
+    @Test func theScorerAnswersWithFactsOrNothing() {
+        #expect(ScorerFrame(line: "@@ready|1.0.1o") == .ready)
+        #expect(ScorerFrame(line: "@@scored|4|EXACT SCORES: a|b") == .scored(ScoreID(4), facts: "EXACT SCORES: a|b"))
+        #expect(ScorerFrame(line: "@@scored|4|") == .scored(ScoreID(4), facts: nil))
+        #expect(ScorerFrame(line: "LONG DT @ 24: 0.1") == nil)
+    }
+
     @Test func aHandWithChanceHasNoPrediction() {
         #expect(BotFrame(line: "@@played|Flush|-|1625.6") == .played(hand: "Flush", predicted: nil, actual: 1625.6))
     }

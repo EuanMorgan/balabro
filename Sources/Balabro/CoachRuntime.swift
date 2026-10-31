@@ -16,15 +16,16 @@ final class CoachRuntime {
     @ObservationIgnored private let coach: Coach
     @ObservationIgnored private let store: RunStore
     @ObservationIgnored private let claude: ClaudeInvocation?
+    @ObservationIgnored private let scorer: Scorer?
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
     @ObservationIgnored private var savesRoot: URL?
 
     private static let goalKey = "goal"
 
-    init(coach: Coach, store: RunStore, claude: ClaudeInvocation?) {
+    init(coach: Coach, store: RunStore, claude: ClaudeInvocation?, scorer: Scorer? = nil) {
         let goal = UserDefaults.standard.string(forKey: Self.goalKey).flatMap(CoachGoal.init) ?? .win
         let state = CoachState(restoring: store.loadAll(), goal: goal)
-        (self.coach, self.store, self.claude, self.state, self.view) = (coach, store, claude, state, state.view)
+        (self.coach, self.store, self.claude, self.scorer, self.state, self.view) = (coach, store, claude, scorer, state, state.view)
     }
 
     /// Consumes save events until the app quits. The watcher's first events are the saves already on disk,
@@ -62,6 +63,14 @@ final class CoachRuntime {
             }
         case .cancelTurn(let id):
             turns.removeValue(forKey: id)?.cancel()
+        case .warmScorer:
+            Task { await scorer?.warm() }
+        case .scoreSave(let id, let profile, let limit):
+            guard let scorer, let savesRoot else {
+                send(.scored(id, facts: nil))
+                return
+            }
+            Task { send(.scored(id, facts: await scorer.score(save: savesRoot.appending(path: "\(profile)/save.jkr"), within: limit))) }
         case .captureGameWindow(let id, let delay):
             Task {
                 try? await Task.sleep(for: delay)

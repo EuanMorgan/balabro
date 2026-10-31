@@ -27,7 +27,7 @@ To update, click **Update** when the panel says a new version is available. Bala
 
 1. Open Balabro. The panel appears, and a Balabro icon appears in the menu bar.
 2. Drag the panel to a corner of the screen. It stays on top of Balatro, even in fullscreen, and remembers where you put it.
-3. Start or continue a run in Balatro. Advice appears a few seconds after each decision.
+3. Start or continue a run in Balatro. Advice appears a few seconds after each decision. Balabro keeps a hidden copy of the game open during a run and loads each save into it, so the scores in the advice come from the game's own scoring. It reads a copy of your save, never changes your own, and closes after 10 minutes without a save.
 4. To ask a follow-up question, such as "why keep the 6?", press **⌃⌥Space** or click the box at the bottom of the panel. The reply appears under the steps, and the steps change if the answer changes what to do. Your questions clear at the next decision. Press **Escape** to go back to the game.
 5. To let the coach see the cards in a booster pack, click **Allow** on the Screen Recording line in the panel, turn Balabro on in System Settings, then reopen Balabro. Without it, the coach asks you to list the cards instead. Above the steps, the panel says whether the coach used your screen or only your save.
 6. If the steps ever look wrong or out of date, click the **refresh arrow** at the top of the panel. The coach looks at the screen again and gives new steps.
@@ -77,7 +77,7 @@ tools/driver/run.sh /tmp/balabro-saves &
 swift run Balabro --saves-root "$HOME/Library/Application Support/LOVE/balabro-driver-game"
 ```
 
-`tools/bot/drive.py` plays a run with your installed Balatro and a fixed plan instead of Claude, to test the "play for me" bot. Run it with `BALABRO_BOT_VERIFY=1` after a Balatro update: it checks that predicted scores match the real ones, and that changing what a player can't see doesn't change the bot's choices. To play one real run from the command line, run `dist/Balabro.app/Contents/MacOS/Balabro --play-for-me win` or `naneinf`.
+`dist/Balabro.app/Contents/MacOS/Balabro --print-exact-scores <save.jkr>` prints what the scorer tells the coach about a save. `tools/bot/drive.py` plays a run with your installed Balatro and a fixed plan instead of Claude, to test the "play for me" bot. Run it with `BALABRO_BOT_VERIFY=1` after a Balatro update: it checks that predicted scores match the real ones, and that changing what a player can't see doesn't change the bot's choices. To play one real run from the command line, run `dist/Balabro.app/Contents/MacOS/Balabro --play-for-me win` or `naneinf`.
 
 To build the app and its zip for a release, run `scripts/make-app.sh <version>`. The output is in `dist/`. Run `scripts/make-signing-identity.sh` once first, so that users keep their Screen Recording permission across updates. Without it, the build is signed ad-hoc and each update loses the permission.
 

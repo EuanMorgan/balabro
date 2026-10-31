@@ -31,10 +31,17 @@ local function describe(decision)
   return decision.action .. ":" .. table.concat(decision.ids, ",") .. ":" .. jokers
 end
 
+local function describe_report(report)
+  local parts = {}
+  for _, play in ipairs(report.plays) do parts[#parts + 1] = play.name .. "=" .. play.score end
+  for _, card in ipairs(report.discard or {}) do parts[#parts + 1] = card.label end
+  return table.concat(parts, ",") .. ":" .. tostring(report.reach)
+end
+
 -- Everything a player can't see is changed. The solver's answer must not change by a byte.
 local function blindfold(world, solver)
   local fixed = { world = world, now = function() return 0 end, seed = 12345 }
-  local before = describe(solver.decide(world.see(), fixed))
+  local before = describe(solver.decide(world.see(), fixed)) .. describe_report(solver.report(world.see(), fixed))
   for i = #G.deck.cards, 2, -1 do
     local j = math.random(i)
     G.deck.cards[i], G.deck.cards[j] = G.deck.cards[j], G.deck.cards[i]
@@ -42,7 +49,7 @@ local function blindfold(world, solver)
   for key, value in pairs(G.GAME.pseudorandom) do
     if type(value) == "number" and key ~= "hashed_seed" then G.GAME.pseudorandom[key] = (value * 7.3) % 1 end
   end
-  local after = describe(solver.decide(world.see(), fixed))
+  local after = describe(solver.decide(world.see(), fixed)) .. describe_report(solver.report(world.see(), fixed))
   return before == after, before, after
 end
 
@@ -67,6 +74,48 @@ local function appraisal_is_clean(world, solver)
     "green mult " .. green.ability.mult .. ", banner counted " .. tostring(banner_counted)
 end
 
+local function saved_run() return STR_UNPACK(STR_PACK(G.culled_table)) end
+
+-- The scorer trusts a save to hold everything that scores, so a hand must score the same after a reload.
+local function reload_keeps_scores(world)
+  save_run()
+  local saved = saved_run()
+  local function first_five()
+    local view, play, held = world.see(), {}, {}
+    for i, card in ipairs(view.hand) do
+      if card.face_down then return nil end
+      if i <= 5 then play[#play + 1] = card.id else held[#held + 1] = card.id end
+    end
+    return world.rehearse(play, held, 0.5)
+  end
+  local before = first_five()
+  G.FUNCS.start_run(nil, { savetext = saved })
+  if world.next_moment() ~= "hand" then return false, "the save came back as another moment" end
+  local after = first_five()
+  return before == after or (before ~= before and after ~= after), tostring(before) .. " then " .. tostring(after)
+end
+
+-- The coach names a pack's cards from a reload, so it must deal the cards the player is looking at.
+local function reopened_pack_matches(world)
+  local pack = G.shop_booster.cards[1]
+  G.GAME.dollars = 100
+  if world.move("redeem", pack) then return false, "the pack didn't open" end
+  world.next_moment()
+  local saved = saved_run()
+  local function names()
+    local out = {}
+    for i, card in ipairs(G.pack_cards.cards) do out[i] = card.config.center.key .. ":" .. tostring(card.base and card.base.value) end
+    return table.concat(out, ",")
+  end
+  local before = names()
+  if not saved.ACTION then return false, "the save has no pack action" end
+  G.FUNCS.start_run(nil, { savetext = saved })
+  if world.next_moment() ~= "pack" then return false, "the save came back as another moment" end
+  local after = names()
+  world.skip_pack()
+  return before == after, before .. " then " .. after
+end
+
 local function wait_frames(n) for _ = 1, n do coroutine.yield() end end
 
 function verify.main(world, solver, send)
@@ -74,6 +123,7 @@ function verify.main(world, solver, send)
   math.randomseed(os.time())
   local hands, matched, compared, blind_ok, blind_runs = 0, 0, 0, 0, 0
   local appraisal_ok, appraisal_detail
+  local reload_ok, reload_runs, pack_ok, pack_detail = 0, 0, nil, nil
   while hands < HANDS do
     local moment = world.next_moment()
     if moment == "game_over" then error("the verify run lost, which rigged targets shouldn't allow")
@@ -82,16 +132,25 @@ function verify.main(world, solver, send)
     elseif moment == "blind" then world.select_blind()
     elseif moment == "shop" then
       if appraisal_ok == nil then appraisal_ok, appraisal_detail = appraisal_is_clean(world, solver) end
-      world.leave_shop()
+      if pack_ok == nil and #G.shop_booster.cards > 0 then
+        pack_ok, pack_detail = reopened_pack_matches(world)
+        if not pack_ok then send("pack-failed", pack_detail) end
+      else
+        world.leave_shop()
+      end
     elseif moment == "pack" then world.skip_pack()
     elseif moment == "hand" then
       deal_jokers()
       wait_frames(30)
 
+      local same, detail = reload_keeps_scores(world)
+      reload_runs = reload_runs + 1
+      if same then reload_ok = reload_ok + 1 else send("reload-failed", detail) end
+
       G.GAME.blind.chips = 1e30
-      local same, before, after = blindfold(world, solver)
+      local unchanged, before, after = blindfold(world, solver)
       blind_runs = blind_runs + 1
-      if same then blind_ok = blind_ok + 1 else send("blindfold-failed", before, after) end
+      if unchanged then blind_ok = blind_ok + 1 else send("blindfold-failed", before, after) end
       world.see()
       world.audit()
 
@@ -114,8 +173,9 @@ function verify.main(world, solver, send)
       end
     end
   end
-  send("verified", "scores " .. matched .. "/" .. compared, "blindfold " .. blind_ok .. "/" .. blind_runs, "appraisal " .. tostring(appraisal_detail))
-  send("ended", (matched == compared and blind_ok == blind_runs and appraisal_ok) and "pass" or "fail", 0, 0, 0)
+  send("verified", "scores " .. matched .. "/" .. compared, "blindfold " .. blind_ok .. "/" .. blind_runs, "appraisal " .. tostring(appraisal_detail),
+    "reload " .. reload_ok .. "/" .. reload_runs, "pack " .. tostring(pack_ok))
+  send("ended", (matched == compared and blind_ok == blind_runs and appraisal_ok and reload_ok == reload_runs and pack_ok) and "pass" or "fail", 0, 0, 0)
 end
 
 return verify

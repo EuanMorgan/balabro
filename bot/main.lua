@@ -2,6 +2,10 @@
 -- two decision files, which load in a sandbox with no way to reach the game except what they are handed.
 local world = require "bot/world"
 
+local SCORING = os.getenv("BALABRO_BOT_MODE") == "scorer"
+-- A scorer can run beside a "play for me" run, so it keeps its own save folder.
+if SCORING then love.filesystem.setIdentity("balabro-scorer") end
+
 local SAFE = { "table", "string", "ipairs", "pairs", "next", "type", "tostring", "tonumber", "select", "assert", "error",
   "pcall", "unpack", "setmetatable", "getmetatable" }
 
@@ -24,6 +28,8 @@ end
 
 local solver = sandbox("bot/solver.lua")
 local run = sandbox("bot/run.lua")
+local brief = sandbox("bot/brief.lua")
+local scorer = sandbox("bot/scorer.lua")
 
 io.stdout:setvbuf("line")
 
@@ -69,6 +75,22 @@ local function ask(id, kind, picks, path, brief)
   end
 end
 
+-- The newest request wins, because the player has already moved on from the older ones.
+local function next_request()
+  while true do
+    local newest
+    while inbox:getCount() > 0 do
+      newest = inbox:pop()
+      if newest == "EOF" then os.exit(0) end
+    end
+    if newest then
+      local parts = split(newest)
+      if parts[1] == "score" then return tonumber(parts[2]), parts[3] end
+    end
+    coroutine.yield()
+  end
+end
+
 local function fail(kind, detail)
   send("broken", kind, detail)
   io.stdout:flush()
@@ -84,11 +106,15 @@ function love.load()
   love.window.updateMode(960, 540, { fullscreen = false, resizable = true })
   love.resize(960, 540)
   world.prepare_profile()
+  if SCORING then
+    love.window.minimize()
+    love.draw = function() end
+  end
 end
 
 local co = coroutine.create(function()
   run.main({
-    world = world, solver = solver, ask = ask, send = send, now = love.timer.getTime,
+    world = world, solver = solver, brief = brief, ask = ask, send = send, now = love.timer.getTime,
     goal = os.getenv("BALABRO_BOT_GOAL") or "win",
     deck = os.getenv("BALABRO_BOT_DECK") or "b_red",
     stake = tonumber(os.getenv("BALABRO_BOT_STAKE") or "1"),
@@ -108,6 +134,12 @@ function love.update(dt)
       if kind then fail(kind, detail) else fail("crashed", tostring(err) .. " " .. debug.traceback(co)) end
     end
   end
+end
+
+if SCORING then
+  co = coroutine.create(function()
+    scorer.main({ world = world, solver = solver, brief = brief, send = send, next_request = next_request, now = love.timer.getTime })
+  end)
 end
 
 if os.getenv("BALABRO_BOT_VERIFY") then

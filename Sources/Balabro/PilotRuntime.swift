@@ -81,11 +81,14 @@ final class PilotRuntime {
         guard let lua = Bundle.main.url(forResource: "bot", withExtension: nil) else { return fail("Only a packaged Balabro.app can play for you.") }
         do {
             let install = try await BotInstall.prepare(from: game, lua: lua)
-            let (process, output) = try BotProcess.launch(install, setup)
+            let (process, output) = try BotProcess.launch(install, settings: [
+                "BALABRO_BOT_GOAL": setup.goal.rawValue, "BALABRO_BOT_DECK": setup.deck.rawValue, "BALABRO_BOT_STAKE": String(setup.stake),
+            ])
             self.process = process
             for await item in output {
                 switch item {
-                case .frame(let frame): send(.bot(frame, at: .now))
+                case .line(let line):
+                    if let frame = BotFrame(line: line) { send(.bot(frame, at: .now)) }
                 case .exited(let status): send(.botExited(status: status, at: .now))
                 }
             }

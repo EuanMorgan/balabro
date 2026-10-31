@@ -15,6 +15,9 @@ enum BalabroApp {
         if let save = value(after: "--print-prompt", in: arguments) {
             exit(await printPrompt(URL(filePath: save)))
         }
+        if let save = value(after: "--print-exact-scores", in: arguments) {
+            exit(await printExactScores(URL(filePath: save)))
+        }
         if let root = value(after: "--print-next-run", in: arguments) {
             exit(await printNextRun(URL(filePath: root)))
         }
@@ -63,6 +66,20 @@ enum BalabroApp {
         var state = CoachState(restoring: [])
         _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
         print("Kind: \(label(decision.kind))\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
+        return 0
+    }
+
+    /// Prints what the scorer tells the coach about a save, so the scorer can be checked from a script.
+    private static func printExactScores(_ save: URL) async -> Int32 {
+        guard let scorer = Scorer(game: GameInstall.find(), lua: Bundle.main.url(forResource: "bot", withExtension: nil)) else {
+            print("Only a packaged Balabro.app with Balatro installed can score a save.")
+            return 1
+        }
+        guard let facts = await scorer.score(save: save, within: .seconds(60)) else {
+            print("Nothing to work out, or the scorer failed.")
+            return 1
+        }
+        print(facts)
         return 0
     }
 
@@ -164,7 +181,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = await game?.registerFont()
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: Self.conversations)
 
-        let runtime = CoachRuntime(coach: Coach(text: text), store: .default, claude: claude)
+        let scorer = Scorer(game: game, lua: Bundle.main.url(forResource: "bot", withExtension: nil))
+        let coach = Coach(text: text, scoreWait: scorer == nil ? nil : .seconds(8))
+        let runtime = CoachRuntime(coach: coach, store: .default, claude: claude, scorer: scorer)
         let pilot = PilotRuntime(pilot: Pilot(text: text), results: .default, claude: claude, game: game)
         let overlay = OverlayPanel(runtime: runtime, pilot: pilot, updater: updater)
         overlay.orderFrontRegardless()

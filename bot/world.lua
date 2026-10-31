@@ -11,7 +11,7 @@ local CONTRACT = {
     "exit_overlay_menu", "can_buy", "can_reroll", "check_for_buy_space", "get_poker_hand_info" },
   globals = { "pseudoseed", "save_run", "STR_PACK", "copy_card", "delay", "update_hand_text", "card_eval_status_text",
     "juice_card", "highlight_card", "play_sound", "ease_dollars", "check_for_unlock", "check_and_set_high_score",
-    "inc_career_stat", "set_hand_usage", "attention_text", "play_area_status_text", "juice_card_until", "Back", "CardArea", "get_blind_amount" },
+    "inc_career_stat", "set_hand_usage", "attention_text", "play_area_status_text", "juice_card_until", "Back", "CardArea", "get_blind_amount", "STR_UNPACK" },
 }
 
 local function broken(kind, detail) error("broken:" .. kind .. ":" .. detail, 0) end
@@ -120,9 +120,14 @@ local function key_of(c)
     c.seal or "", c.ability.perma_bonus or 0, c.debuff and "d" or "" }, "/")
 end
 
+local SUIT_SYMBOLS = { Spades = "♠", Hearts = "♥", Clubs = "♣", Diamonds = "♦" }
+local RANK_LABELS = { Ace = "A", King = "K", Queen = "Q", Jack = "J" }
+
 local function view_of(c, id)
   local stone = c.ability.effect == "Stone Card"
-  return { id = id, key = key_of(c), rank = stone and nil or c:get_id(), suit = c.base.suit, stone = stone,
+  local suit = SUIT_SYMBOLS[c.base.suit] or ""
+  return { id = id, key = key_of(c), label = stone and "Stone card" or (RANK_LABELS[c.base.value] or c.base.value) .. suit,
+    rank = stone and nil or c:get_id(), suit = c.base.suit, stone = stone,
     wild = c.ability.effect == "Wild Card", debuffed = c.debuff == true, value = c.base.nominal }
 end
 
@@ -188,7 +193,7 @@ function world.see()
   for _, c in ipairs(G.hand.cards) do
     local id = register(c)
     if c.facing == "back" then
-      view.hand[#view.hand + 1] = { id = id, face_down = true, forced = c.ability.forced_selection == true }
+      view.hand[#view.hand + 1] = { id = id, label = "face-down card", face_down = true, forced = c.ability.forced_selection == true }
       hidden[#hidden + 1] = c
       world.hidden[id] = true
     else
@@ -302,6 +307,7 @@ function world.rehearse(play_ids, held_ids, roll, order_ids)
 
   local ok, err = pcall(world.real_evaluate)
   local score, name = ok and hand_chips * mult or 0, G.GAME.last_hand_played
+  local chips, final_mult = hand_chips, mult
 
   G.E_MANAGER.add_event, CardArea.emplace, _G.copy_card, _G.pseudoseed = add_event, real_emplace, real_copy, real_seed
   for _, n in ipairs(SILENCED) do _G[n] = saved[n] end
@@ -317,7 +323,7 @@ function world.rehearse(play_ids, held_ids, roll, order_ids)
   if not ok then broken("rehearsal", tostring(err)) end
   -- The game's own check `chips >= target` is false for nan, so nan can't clear a blind.
   if score ~= score then score = 0 end
-  return score, name, chancy
+  return score, name, chancy, chips, final_mult
 end
 
 -- After a batch of rehearsals everything must be as it was, or this is no longer a fair run.
@@ -418,6 +424,17 @@ function world.skip_pack()
   G.FUNCS.skip_booster({ config = {} })
   wait_for("the pack to close", function() return not in_pack() end)
 end
+
+-- Only a private copy may do this: it replaces the run in progress with the one in the save.
+function world.load_save(path)
+  local file = assert(io.open(path, "rb"))
+  local data = file:read("*a")
+  file:close()
+  G.FUNCS.start_run(nil, { savetext = STR_UNPACK(love.data.decompress("string", "deflate", data)) })
+end
+
+-- The game's clock is capped per frame, so a slow idle loop costs nothing once frames speed up again.
+function world.set_idle(idle) G.FPS_CAP = idle and 4 or 500 end
 
 function world.targets()
   local base = get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling

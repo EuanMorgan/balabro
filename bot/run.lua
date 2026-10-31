@@ -53,40 +53,10 @@ local function status(ctx, doing)
   ctx.send("status", world.ante(), world.round(), world.dollars(), world.best_hand(), doing)
 end
 
-local function number(n)
-  if n >= 1e11 then return string.format("%.3e", n) end
-  local text = string.format("%.0f", n)
-  local grouped = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-  return (grouped:gsub("^,", ""))
-end
-
--- Facts a careful player would work out for themselves before spending.
-local function score_check(ctx, kind)
-  local world = ctx.world
-  local t = world.targets()
-  local lines = { string.format("Score check: this ante's blinds need %s, %s and %s for the Boss. Next ante's Small Blind needs %s. Your best hand this run is %s.",
-    number(t.small), number(t.big), number(t.boss), number(t.next_small), number(world.best_hand())) }
-  local view = world.see()
-  if (kind == "shop" or kind == "pack") and #view.hand == 0 then
-    local a = ctx.solver.appraise(view, { world = world, now = ctx.now, seed = (math.floor(ctx.now() * 1000) % 2147483646) + 1 })
-    world.audit()
-    lines[#lines + 1] = string.format("From a fresh hand your jokers typically score %s (worst %s, best %s of 7 hands).", number(a.typical), number(a.low), number(a.high))
-    local changes = {}
-    for _, offer in ipairs(a.offers) do
-      changes[#changes + 1] = string.format("adding %s (%s %d) makes it %s", offer.name, offer.row, offer.position, number(offer.typical))
-    end
-    for _, joker in ipairs(a.owned) do
-      changes[#changes + 1] = string.format("without %s (joker %d) it would be %s", joker.name, joker.position, number(joker.typical))
-    end
-    if #changes > 0 then lines[#lines + 1] = "On those same hands: " .. table.concat(changes, "; ") .. "." end
-  end
-  return table.concat(lines, " ")
-end
-
 local function question(ctx, kind)
   ctx.next_question = ctx.next_question + 1
   local id = ctx.next_question
-  local brief = score_check(ctx, kind)
+  local brief = ctx.brief.score_check(ctx.world, ctx.solver, ctx.now, kind)
   local plan = ctx.ask(id, kind, ctx.world.picks_left(), ctx.world.write_decision(id), brief)
   local why, moves, ending = plan_lines(plan)
   if why then status(ctx, why) end

@@ -32,6 +32,8 @@ struct BotInstall: Sendable {
             // With no Balatro.love inside, LÖVE runs the folder it's given instead of the shipped game.
             try files.removeItem(at: install.runtime.appending(path: "Contents/Resources/Balatro.love"))
         }
+        // No Dock icon. Done on every launch, so a copy built by an older Balabro gets it too.
+        _ = await Command.run(URL(filePath: "/usr/bin/plutil"), ["-replace", "LSUIElement", "-bool", "YES", install.runtime.appending(path: "Contents/Info.plist").path], timeout: .seconds(10))
         let botFolder = install.gameFolder.appending(path: "bot")
         try? files.removeItem(at: botFolder)
         try files.copyItem(at: lua, to: botFolder)
@@ -40,7 +42,7 @@ struct BotInstall: Sendable {
 }
 
 enum BotOutput: Sendable {
-    case frame(BotFrame)
+    case line(String)
     case exited(Int32)
 }
 
@@ -52,17 +54,14 @@ final class BotProcess: Sendable {
 
     private init(process: Process, stdin: FileHandle) { (self.process, self.stdin) = (process, stdin) }
 
-    static func launch(_ install: BotInstall, _ setup: PilotSetup) throws -> (BotProcess, AsyncStream<BotOutput>) {
+    static func launch(_ install: BotInstall, settings: [String: String]) throws -> (BotProcess, AsyncStream<BotOutput>) {
         let process = Process()
         process.executableURL = install.runtime.appending(path: "Contents/MacOS/love")
         process.arguments = [install.gameFolder.path]
         var environment = ProcessInfo.processInfo.environment
         // Otherwise the new window would pull the player out of whatever they're doing.
         environment["SDL_MAC_BACKGROUND_APP"] = "1"
-        environment["BALABRO_BOT_GOAL"] = setup.goal.rawValue
-        environment["BALABRO_BOT_DECK"] = setup.deck.rawValue
-        environment["BALABRO_BOT_STAKE"] = String(setup.stake)
-        process.environment = environment
+        process.environment = environment.merging(settings) { $1 }
         let stdin = Pipe(), stdout = Pipe()
         (process.standardInput, process.standardOutput, process.standardError) = (stdin, stdout, FileHandle.nullDevice)
         let (exit, exited) = AsyncStream.makeStream(of: Int32.self)
@@ -83,7 +82,7 @@ final class BotProcess: Sendable {
                     while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
                         let line = String(decoding: pending[pending.startIndex..<newline], as: UTF8.self)
                         pending = pending[(newline + 1)...]
-                        if let frame = BotFrame(line: line) { continuation.yield(.frame(frame)) }
+                        continuation.yield(.line(line))
                     }
                 }
                 Task {

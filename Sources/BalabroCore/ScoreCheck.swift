@@ -20,20 +20,23 @@ struct ScorePrediction: Sendable {
     enum Outcome: Equatable {
         /// The hand hasn't been played yet.
         case pending
-        /// Played, or no longer checkable. The note is set when the score was off by more than a tenth.
-        case settled(note: String?)
+        /// The player did something else, or the save can't say what the hand scored.
+        case uncheckable
+        case matched
+        /// Off by more than a tenth.
+        case missed(note: String)
     }
 
     func check(_ s: RunSnapshot) -> Outcome {
-        guard s.identity == before.identity, s.round == before.round else { return .settled(note: nil) }
+        guard s.identity == before.identity, s.round == before.round else { return .uncheckable }
         if s.handsLeft == before.handsLeft { return .pending }
         // The score resets at cash out, so the shop's save can't say what the last hand scored.
         guard s.handsLeft == before.handsLeft - 1, s.phase == .selectingHand || s.phase == .roundEval,
               let played = playedHand(in: s), played == predictedHand
-        else { return .settled(note: nil) }
+        else { return .uncheckable }
         let actual = s.chipsScored - before.chipsScored
-        guard abs(actual - total) > total / 10 else { return .settled(note: nil) }
-        return .settled(note: Prompt.scoreCheck(line, actual: actual))
+        guard abs(actual - total) > total / 10 else { return .matched }
+        return .missed(note: Prompt.scoreCheck(line, actual: actual))
     }
 
     private func playedHand(in s: RunSnapshot) -> String? {

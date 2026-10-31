@@ -31,6 +31,14 @@ public struct Decision: Sendable, Hashable {
         if case .openPack = kind { true } else { false }
     }
 
+    /// A blind select has no sums, and a tag's pack isn't in the save, so reloading it wouldn't show that pack.
+    var canBeScored: Bool {
+        switch kind {
+        case .playHand, .shop, .openPack(_, from: .shop): true
+        case .blindSelect, .openPack(_, from: .skipTag): false
+        }
+    }
+
     /// Returns nil for writes that aren't decisions: round end, game over, new round, menu and unknown states.
     ///
     /// Rules, in order:
