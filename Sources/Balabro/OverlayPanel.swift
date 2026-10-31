@@ -26,13 +26,43 @@ final class OverlayPanel: NSPanel {
         hasShadow = true
         minSize = NSSize(width: 280, height: 240)
         contentView = NSHostingView(rootView: OverlayView(runtime: runtime, pilot: pilot, updater: updater))
-        if let screen = NSScreen.main?.visibleFrame {
-            setFrameOrigin(NSPoint(x: screen.maxX - frame.width - 24, y: screen.maxY - frame.height - 24))
-        }
+        moveToCorner()
         setFrameAutosaveName("overlay")
     }
 
     override var canBecomeKey: Bool { true }
+
+    func moveToCorner() {
+        guard let screen = NSScreen.main?.visibleFrame else { return }
+        setFrameOrigin(NSPoint(x: screen.maxX - frame.width - 24, y: screen.maxY - frame.height - 24))
+    }
+
+    private var drag: (mouse: NSPoint, origin: NSPoint)?
+
+    /// The title moves the panel even if `isMovableByWindowBackground` doesn't start a drag, which was reported on macOS 27.
+    /// The header's buttons are left out, because a button still fires when the mouse comes up on it.
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            let point = event.locationInWindow
+            let onTitle = point.y > frame.height - Self.titleHeight && point.x < frame.width - Self.headerButtonsWidth
+            drag = onTitle ? (convertPoint(toScreen: point), frame.origin) : nil
+        case .leftMouseDragged:
+            if let drag {
+                let mouse = convertPoint(toScreen: event.locationInWindow)
+                setFrameOrigin(NSPoint(x: drag.origin.x + mouse.x - drag.mouse.x, y: drag.origin.y + mouse.y - drag.mouse.y))
+                return
+            }
+        case .leftMouseUp:
+            drag = nil
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
+
+    private static let titleHeight: CGFloat = 44
+    private static let headerButtonsWidth: CGFloat = 100
 
     /// The global shortcut: show the panel, make it key, focus the question field.
     func focusQuestionField() {

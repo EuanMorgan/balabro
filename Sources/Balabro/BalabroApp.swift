@@ -199,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "suit.spade.fill", accessibilityDescription: "Balabro")
         let menu = NSMenu()
         menu.addItem(withTitle: "Show overlay", action: #selector(showOverlay), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Move overlay to the corner", action: #selector(moveOverlayToCorner), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Your stats", action: #selector(showStats), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Balabro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -207,6 +208,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showOverlay() { overlay?.orderFrontRegardless() }
+
+    @objc private func moveOverlayToCorner() {
+        overlay?.moveToCorner()
+        overlay?.orderFrontRegardless()
+    }
 
     @objc private func showStats() {
         statsWindow?.close()
