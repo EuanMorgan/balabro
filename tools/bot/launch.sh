@@ -10,7 +10,8 @@ WORK=${TMPDIR:-/tmp}/balabro-bot-dev
 GAME="$WORK/balabro-bot-dev"
 RUNTIME="$WORK/Runtime.app"
 
-if [[ ! -d "$RUNTIME" ]]; then
+if [[ ! -f "$GAME/engine/object.lua" || ! -d "$RUNTIME" ]]; then
+  rm -rf "$WORK"
   mkdir -p "$GAME"
   unzip -q "$BALATRO_APP/Contents/Resources/Balatro.love" -d "$GAME"
   print 'require "bot/main"' >> "$GAME/main.lua"
