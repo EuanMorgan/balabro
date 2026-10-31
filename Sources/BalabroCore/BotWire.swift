@@ -5,7 +5,7 @@ import Foundation
 public enum BotFrame: Sendable, Hashable {
     case ready(gameVersion: String)
     case status(BotStatus)
-    case decide(QuestionID, BotAsk, file: URL)
+    case decide(QuestionID, BotAsk, file: URL, brief: String)
     case refused(QuestionID, move: String, reason: String)
     /// `predicted` is nil when the hand depended on chance or on face-down cards, so there's nothing to compare.
     case played(hand: String, predicted: Double?, actual: Double)
@@ -26,7 +26,7 @@ public enum BotFrame: Sendable, Hashable {
         case "decide":
             guard let id = field(1).flatMap(Int.init), let kind = field(2), let picks = field(3).flatMap(Int.init), let path = field(4),
                   let ask = BotAsk(kind: kind, picks: picks) else { return nil }
-            self = .decide(QuestionID(id), ask, file: URL(filePath: path))
+            self = .decide(QuestionID(id), ask, file: URL(filePath: path), brief: parts.dropFirst(5).joined(separator: "|"))
         case "refused":
             guard let id = field(1).flatMap(Int.init), let move = field(2), let reason = field(3) else { return nil }
             self = .refused(QuestionID(id), move: move, reason: reason)

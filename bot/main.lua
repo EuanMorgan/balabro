@@ -52,8 +52,8 @@ local function split(line)
   return parts
 end
 
-local function ask(id, kind, picks, path)
-  send("decide", id, kind, picks, path)
+local function ask(id, kind, picks, path, brief)
+  send("decide", id, kind, picks, path, brief)
   while true do
     local line = inbox:pop()
     if line == "EOF" then os.exit(0) end

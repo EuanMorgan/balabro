@@ -46,19 +46,43 @@ local function blindfold(world, solver)
   return before == after, before, after
 end
 
+-- Rehearsing a Green Joker on offer must not grow it, and Banner must count a new round's discards, not the last round's.
+local function appraisal_is_clean(world, solver)
+  local function add(area, key)
+    local joker = create_card("Joker", area, nil, nil, nil, nil, key)
+    area:emplace(joker)
+    return joker
+  end
+  local green = add(G.shop_jokers, "j_green_joker")
+  add(G.jokers, "j_banner")
+  add(G.jokers, "j_joker")
+  G.GAME.current_round.discards_left = 0
+  local appraisal = solver.appraise(world.see(), { world = world, now = love.timer.getTime, seed = 777 })
+  world.audit()
+  local banner_counted = false
+  for _, joker in ipairs(appraisal.owned) do
+    if joker.name == "Banner" and joker.typical < appraisal.typical then banner_counted = true end
+  end
+  return green.ability.mult == 0 and banner_counted and G.GAME.current_round.discards_left == 0,
+    "green mult " .. green.ability.mult .. ", banner counted " .. tostring(banner_counted)
+end
+
 local function wait_frames(n) for _ = 1, n do coroutine.yield() end end
 
 function verify.main(world, solver, send)
   world.start({ deck = "b_red", stake = 1 })
   math.randomseed(os.time())
   local hands, matched, compared, blind_ok, blind_runs = 0, 0, 0, 0, 0
+  local appraisal_ok, appraisal_detail
   while hands < HANDS do
     local moment = world.next_moment()
     if moment == "game_over" then error("the verify run lost, which rigged targets shouldn't allow")
     elseif moment == "win_screen" then world.continue_endless()
     elseif moment == "cash_out" then world.cash_out()
     elseif moment == "blind" then world.select_blind()
-    elseif moment == "shop" then world.leave_shop()
+    elseif moment == "shop" then
+      if appraisal_ok == nil then appraisal_ok, appraisal_detail = appraisal_is_clean(world, solver) end
+      world.leave_shop()
     elseif moment == "pack" then world.skip_pack()
     elseif moment == "hand" then
       deal_jokers()
@@ -90,8 +114,8 @@ function verify.main(world, solver, send)
       end
     end
   end
-  send("verified", "scores " .. matched .. "/" .. compared, "blindfold " .. blind_ok .. "/" .. blind_runs)
-  send("ended", (matched == compared and blind_ok == blind_runs) and "pass" or "fail", 0, 0, 0)
+  send("verified", "scores " .. matched .. "/" .. compared, "blindfold " .. blind_ok .. "/" .. blind_runs, "appraisal " .. tostring(appraisal_detail))
+  send("ended", (matched == compared and blind_ok == blind_runs and appraisal_ok) and "pass" or "fail", 0, 0, 0)
 end
 
 return verify

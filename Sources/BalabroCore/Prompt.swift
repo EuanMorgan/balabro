@@ -481,9 +481,14 @@ enum Prompt {
         Planet and Spectral cards take effect at once. To take nothing, reply with only "next play".
         - At a blind decision, the only useful line is "next play" or "next skip".
         - If the state lists moves the game refused, it means they didn't happen. Don't repeat them.
-        - Early on, buy what scores now and keep $25 for interest when you can. Each ante's target is far higher than the \
-        last, so by Ante 4 you need Mult that scales, and by Ante 6 you need XMult. Five jokers that work together beat five \
-        good ones. Level up the one hand type your build plays.
+        - Each state ends with a score check. Its numbers are exact, worked out with the game's own scoring on seven fresh \
+        hands. Compare what your jokers typically score with what the coming blinds need. If you can't reach the Boss \
+        or the next ante's blinds, spending to fix that matters more than interest, because a lost run earns nothing. Money \
+        you still hold when you lose was wasted.
+        - The check only shows what a joker does right now. A joker that grows, or pays out later, shows little at first, \
+        so read its text. Selling a joker that adds little to make room is usually right.
+        - Each ante's target is far higher than the last. By Ante 4 you need Mult that grows, and by Ante 6 you need XMult. \
+        Five jokers that work together beat five good ones. Level up the one hand type your build plays.
         - \(moneyRule)
         - \(jokerTextRule)
         - \(naneinfRule)

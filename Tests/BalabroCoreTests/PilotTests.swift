@@ -58,8 +58,8 @@ struct BotFrameTests {
     }
 
     @Test func aDecisionCarriesThePicksForAPack() {
-        let frame = BotFrame(line: "@@decide|7|pack|2|/tmp/decision-7.jkr")
-        #expect(frame == .decide(QuestionID(7), .pack(picks: 2), file: URL(filePath: "/tmp/decision-7.jkr")))
+        let frame = BotFrame(line: "@@decide|7|pack|2|/tmp/decision-7.jkr|Score check.")
+        #expect(frame == .decide(QuestionID(7), .pack(picks: 2), file: URL(filePath: "/tmp/decision-7.jkr"), brief: "Score check."))
     }
 
     @Test func aHandWithChanceHasNoPrediction() {
@@ -85,7 +85,7 @@ struct PilotReducerTests {
     }
 
     func asking(_ state: inout PilotState) throws -> TurnRequest {
-        _ = pilot.reduce(&state, .bot(.decide(QuestionID(1), .shop, file: URL(filePath: "/tmp/d")), at: start))
+        _ = pilot.reduce(&state, .bot(.decide(QuestionID(1), .shop, file: URL(filePath: "/tmp/d"), brief: "Score check."), at: start))
         let snapshot = try SaveFile.decode(Fixture.save("05-shop"), profile: 1)
         let effects = pilot.reduce(&state, .decisionRead(QuestionID(1), .success(snapshot), packCards: []))
         guard case .startTurn(let request)? = effects.first else {
@@ -99,10 +99,11 @@ struct PilotReducerTests {
         var state = running()
         let request = try asking(&state)
         #expect(request.forkFrom == nil)
+        #expect(request.message.text.hasSuffix("\nScore check."))
         let effects = pilot.reduce(&state, .turnOutput(request.id, .done("Why: Cheap.\nbuy card 1\nnext play", SessionID(rawValue: "s1"))))
         #expect(effects == [.tell("plan|1|why:Cheap.|buy card 1|end:next play")])
 
-        _ = pilot.reduce(&state, .bot(.decide(QuestionID(2), .shop, file: URL(filePath: "/tmp/d")), at: start))
+        _ = pilot.reduce(&state, .bot(.decide(QuestionID(2), .shop, file: URL(filePath: "/tmp/d"), brief: "Score check."), at: start))
         let snapshot = try SaveFile.decode(Fixture.save("05-shop"), profile: 1)
         guard case .startTurn(let next)? = pilot.reduce(&state, .decisionRead(QuestionID(2), .success(snapshot), packCards: [])).first else {
             Issue.record("expected a turn")
@@ -128,7 +129,7 @@ struct PilotReducerTests {
     @Test func twoFailedQuestionsInARowEndTheRun() throws {
         var state = running()
         for question in 1...2 {
-            _ = pilot.reduce(&state, .bot(.decide(QuestionID(question), .shop, file: URL(filePath: "/tmp/d")), at: start))
+            _ = pilot.reduce(&state, .bot(.decide(QuestionID(question), .shop, file: URL(filePath: "/tmp/d"), brief: "Score check."), at: start))
             let snapshot = try SaveFile.decode(Fixture.save("05-shop"), profile: 1)
             guard case .startTurn(let first)? = pilot.reduce(&state, .decisionRead(QuestionID(question), .success(snapshot), packCards: [])).first,
                   case .startTurn(let second)? = pilot.reduce(&state, .turnOutput(first.id, .failed(.malformedOutput))).first
@@ -163,7 +164,7 @@ struct PilotReducerTests {
         let first = try asking(&state)
         #expect(first.message.text.contains("refused these moves from your last reply: buy card 1 (not enough money)"))
         _ = pilot.reduce(&state, .turnOutput(first.id, .done("next play", SessionID(rawValue: "s1"))))
-        _ = pilot.reduce(&state, .bot(.decide(QuestionID(2), .shop, file: URL(filePath: "/tmp/d")), at: start))
+        _ = pilot.reduce(&state, .bot(.decide(QuestionID(2), .shop, file: URL(filePath: "/tmp/d"), brief: "Score check."), at: start))
         let snapshot = try SaveFile.decode(Fixture.save("05-shop"), profile: 1)
         guard case .startTurn(let second)? = pilot.reduce(&state, .decisionRead(QuestionID(2), .success(snapshot), packCards: [])).first else {
             Issue.record("expected a turn")

@@ -54,8 +54,8 @@ public struct Pilot: Sendable {
             flight.gameVersion = version
         case .status(let status):
             flight.status = status
-        case .decide(let id, let ask, let file):
-            flight.question = OpenQuestion(id: id, ask: ask)
+        case .decide(let id, let ask, let file, let brief):
+            flight.question = OpenQuestion(id: id, ask: ask, brief: brief)
             return [.readDecision(id, file: file)]
         case .refused(_, let move, let reason):
             flight.refused.append("\(move) (\(reason))")
@@ -93,7 +93,7 @@ public struct Pilot: Sendable {
         case .hand: .hand
         case .pack(let picks): .pack(packCards, picks: picks)
         }
-        question.prompt = Prompt.pilotDecision(asked, snapshot, text, goal: flight.setup.goal, refused: flight.refused)
+        question.prompt = Prompt.pilotDecision(asked, snapshot, text, goal: flight.setup.goal, refused: flight.refused) + "\n" + question.brief
         flight.refused = []
         flight.question = question
         state.phase = .running(flight)
@@ -206,6 +206,8 @@ public enum PilotQuestion: Sendable, Hashable {
 public struct OpenQuestion: Sendable {
     var id: QuestionID
     var ask: BotAsk
+    /// What the bot worked out in the game: the blinds' targets, and what each joker on offer would do.
+    var brief: String
     var prompt = ""
     var turn: TurnID?
     var attempts = 0

@@ -226,6 +226,51 @@ local function best_discard(view, ctx, stand_in, pace, deadline)
   return keeps[1]
 end
 
+local APPRAISAL_DRAWS, APPRAISAL_PLAYS = 7, 30
+
+-- What the jokers score from a fresh hand, and what each change would do, on the same hands so the differences are real.
+-- Only meaningful with no hand on the table, as in a shop.
+function solver.appraise(view, ctx)
+  ctx.rng = new_rng(ctx.seed)
+  local hands = {}
+  for i = 1, APPRAISAL_DRAWS do
+    hands[i] = plays_worth_rehearsing(draw_hand({}, view, ctx.rng), view, APPRAISAL_PLAYS)
+  end
+  local function scores(order)
+    local tops = {}
+    for i, options in ipairs(hands) do
+      local top = 0
+      for _, option in ipairs(options) do
+        local score = rehearse(ctx, option.play, option.held, order, {})
+        if score > top then top = score end
+      end
+      tops[i] = top
+    end
+    table.sort(tops)
+    return tops
+  end
+  return ctx.world.as_fresh_round(function()
+    local owned = ids_of(view.jokers)
+    local now = scores(owned)
+    local result = { low = now[1], typical = now[math.ceil(#now / 2)], high = now[#now], offers = {}, owned = {} }
+    for _, offer in ipairs(view.offers) do
+      local order = ids_of(view.jokers)
+      order[#order + 1] = offer.id
+      local with = scores(order)
+      result.offers[#result.offers + 1] = { row = offer.row, position = offer.position, name = offer.name, typical = with[math.ceil(#with / 2)] }
+    end
+    if #view.jokers > 1 then
+      for i, joker in ipairs(view.jokers) do
+        local order = {}
+        for j, id in ipairs(owned) do if j ~= i then order[#order + 1] = id end end
+        local without = scores(order)
+        result.owned[#result.owned + 1] = { position = joker.position, name = joker.name, typical = without[math.ceil(#without / 2)] }
+      end
+    end
+    return result
+  end)
+end
+
 -- Returns { action = "play" | "discard", ids, order, doing, predicted }.
 -- ctx = { world, now, seed }. The seed comes from the caller's clock, never from the game's random stream.
 function solver.decide(view, ctx)

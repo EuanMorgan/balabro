@@ -11,7 +11,7 @@ local CONTRACT = {
     "exit_overlay_menu", "can_buy", "can_reroll", "check_for_buy_space", "get_poker_hand_info" },
   globals = { "pseudoseed", "save_run", "STR_PACK", "copy_card", "delay", "update_hand_text", "card_eval_status_text",
     "juice_card", "highlight_card", "play_sound", "ease_dollars", "check_for_unlock", "check_and_set_high_score",
-    "inc_career_stat", "set_hand_usage", "attention_text", "play_area_status_text", "juice_card_until", "Back", "CardArea" },
+    "inc_career_stat", "set_hand_usage", "attention_text", "play_area_status_text", "juice_card_until", "Back", "CardArea", "get_blind_amount" },
 }
 
 local function broken(kind, detail) error("broken:" .. kind .. ":" .. detail, 0) end
@@ -166,12 +166,12 @@ local function restore_card(saved)
   for _, field in ipairs(CARD_FIELDS) do c[field] = saved[field] end
 end
 
-local function take_standing()
-  local s = { game = copy(G.GAME), blind = copy(G.GAME.blind), cards = {}, hand = G.hand.cards, play = G.play.cards,
+local function take_standing(offered)
+  local s = { offered = offered, game = copy(G.GAME), blind = copy(G.GAME.blind), cards = {}, hand = G.hand.cards, play = G.play.cards,
     jokers = G.jokers.cards, playing_count = #G.playing_cards, deck_limit = G.deck.config.card_limit,
     chips = hand_chips, mult = mult, deck_order = {} }
   for i, c in ipairs(G.deck.cards) do s.deck_order[i] = c end
-  for _, area in ipairs({ G.playing_cards, G.jokers.cards, G.consumeables.cards }) do
+  for _, area in ipairs({ G.playing_cards, G.jokers.cards, G.consumeables.cards, offered }) do
     for _, c in ipairs(area) do s.cards[#s.cards + 1] = save_card(c) end
   end
   return s
@@ -205,6 +205,19 @@ function world.see()
     view.consumables[#view.consumables + 1] = { id = register(c), needs_hand = aims }
   end
 
+  -- Jokers on offer, so their effect can be rehearsed before buying, as a player would work it out.
+  view.offers = {}
+  local offered = {}
+  local row, offer_area = "card", G.shop_jokers
+  if in_pack() then row, offer_area = "pick", G.pack_cards end
+  for position, c in ipairs(offer_area and offer_area.cards or {}) do
+    if c.ability.set == "Joker" then
+      offered[#offered + 1] = c
+      view.offers[#view.offers + 1] = { id = register(c), row = row, position = position, name = c.ability.name }
+    end
+  end
+  for position, joker in ipairs(view.jokers) do joker.position, joker.name = position, by_id[joker.id].ability.name end
+
   -- Sorted by what the cards are, so the order of this list says nothing about the order of the deck.
   local unseen = {}
   for _, c in ipairs(G.deck.cards) do unseen[#unseen + 1] = c end
@@ -222,8 +235,21 @@ function world.see()
   view.levels = {}
   for name, hand in pairs(G.GAME.hands) do view.levels[name] = { chips = hand.chips, mult = hand.mult } end
 
-  standing = take_standing()
+  standing = take_standing(offered)
   return view
+end
+
+-- Between rounds the counters still hold what the last round left, which would skew Banner, Acrobat and the like.
+function world.as_fresh_round(rehearsals)
+  local real, round = standing, G.GAME.current_round
+  round.discards_left = math.max(0, G.GAME.round_resets.discards + G.GAME.round_bonus.discards)
+  round.hands_left = math.max(1, G.GAME.round_resets.hands + G.GAME.round_bonus.next_hands)
+  round.hands_played, round.discards_used = 0, 0
+  standing = take_standing(real.offered)
+  local result = rehearsals()
+  restore(G.GAME, real.game)
+  standing = real
+  return result
 end
 
 local NOOP = function() end
@@ -391,6 +417,13 @@ end
 function world.skip_pack()
   G.FUNCS.skip_booster({ config = {} })
   wait_for("the pack to close", function() return not in_pack() end)
+end
+
+function world.targets()
+  local base = get_blind_amount(G.GAME.round_resets.ante) * G.GAME.starting_params.ante_scaling
+  local boss = G.P_BLINDS[G.GAME.round_resets.blind_choices.Boss]
+  return { small = base, big = base * 1.5, boss = base * (boss and boss.mult or 2),
+    next_small = get_blind_amount(G.GAME.round_resets.ante + 1) * G.GAME.starting_params.ante_scaling }
 end
 
 function world.dollars() return G.GAME.dollars end
