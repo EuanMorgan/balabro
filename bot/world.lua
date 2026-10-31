@@ -397,7 +397,8 @@ function world.dollars() return G.GAME.dollars end
 function world.best_hand() return G.GAME.round_scores.hand and G.GAME.round_scores.hand.amt or 0 end
 function world.ante() return G.GAME.round_resets.ante end
 function world.round() return G.GAME.round end
-function world.picks_left() return G.GAME.pack_choices or 0 end
+-- The game leaves pack_choices at 1 after the last pick, so it only counts while a pack is open.
+function world.picks_left() return in_pack() and G.GAME.pack_choices or 0 end
 
 local ROWS = {
   card = function() return G.shop_jokers end, voucher = function() return G.shop_vouchers end,

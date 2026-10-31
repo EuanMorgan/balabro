@@ -6,7 +6,8 @@ Usage: tools/bot/drive.py [timeout seconds]. Prints the bot's messages and exits
 import os, select, subprocess, sys, time
 
 PLANS = {
-    "shop": ["buy card 1", "buy card 2", "end:next play"],
+    "shop": ["buy card 1", "buy card 2", "end:open 1"],
+    "shop again": ["end:next play"],
     "pack": ["take pick 1", "end:next play"],
     "blind": ["end:next play"],
     "hand": ["end:next play"],
@@ -17,6 +18,7 @@ game = subprocess.Popen([launch], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 deadline = time.time() + float(sys.argv[1] if len(sys.argv) > 1 else 300)
 start = time.time()
 ending = None
+opened_pack = False
 while time.time() < deadline:
     if not select.select([game.stdout], [], [], 1)[0]:
         continue
@@ -28,7 +30,11 @@ while time.time() < deadline:
     parts = line[2:].rstrip("\n").split("|")
     print(f"{time.time() - start:7.1f} {line[2:].rstrip()}", flush=True)
     if parts[0] == "decide":
-        reply = "plan|" + parts[1] + "|" + "|".join(PLANS[parts[2]])
+        kind = parts[2]
+        if kind == "shop" and opened_pack:
+            kind = "shop again"
+        opened_pack = parts[2] == "shop" and not opened_pack
+        reply = "plan|" + parts[1] + "|" + "|".join(PLANS[kind])
         game.stdin.write(reply + "\n")
         game.stdin.flush()
     elif parts[0] in ("ended", "broken"):

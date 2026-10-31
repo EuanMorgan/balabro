@@ -94,7 +94,8 @@ local function shop_moment(ctx, state)
     if refusal then ctx.send("refused", ctx.next_question, "reroll", refusal) end
   elseif ending:match("^open ") then
     local card = ctx.world.resolve("pack", tonumber(ending:match("%d+")) or 0)
-    local refusal = card and ctx.world.move("redeem", card) or "nothing is at that position"
+    local refusal = "nothing is at that position"
+    if card then refusal = ctx.world.move("redeem", card) end
     if refusal then ctx.send("refused", ctx.next_question, ending, refusal) end
   else
     state.next_blind = ending:match("skip") and "skip" or "play"
