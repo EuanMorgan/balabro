@@ -102,6 +102,7 @@ love.errhand = function(message) fail("crashed", tostring(message) .. " " .. deb
 
 function love.load()
   G.SETTINGS.WINDOW.screenmode = "Windowed"
+  world.lower_graphics()
   G:start_up()
   love.window.updateMode(960, 540, { fullscreen = false, resizable = true })
   love.resize(960, 540)

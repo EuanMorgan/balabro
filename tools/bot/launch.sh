@@ -18,6 +18,7 @@ if [[ ! -f "$GAME/engine/object.lua" || ! -d "$RUNTIME" ]]; then
   ditto "$BALATRO_APP" "$RUNTIME"
   rm "$RUNTIME/Contents/Resources/Balatro.love"
 fi
+plutil -replace LSUIElement -bool YES "$RUNTIME/Contents/Info.plist"
 rm -rf "$GAME/bot"
 mkdir -p "$GAME/bot"
 cp "$REPO"/bot/*.lua "$REPO"/tools/bot/verify.lua "$GAME/bot/"

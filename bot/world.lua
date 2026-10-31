@@ -27,6 +27,17 @@ end
 
 function world.version() return G.VERSION or "unknown" end
 
+-- The game reads its settings file just before loading textures, so this has to happen at that moment.
+function world.lower_graphics()
+  local load_textures = G.set_render_settings
+  G.set_render_settings = function(game)
+    local graphics = game.SETTINGS.GRAPHICS
+    graphics.texture_scaling, graphics.shadows, graphics.crt, graphics.bloom = 1, "Off", 0, 1
+    game.SETTINGS.screenshake, game.SETTINGS.reduced_motion = false, true
+    return load_textures(game)
+  end
+end
+
 function world.prepare_profile()
   G.SETTINGS.tutorial_complete = true
   G.SETTINGS.GAMESPEED = GAME_SPEED
