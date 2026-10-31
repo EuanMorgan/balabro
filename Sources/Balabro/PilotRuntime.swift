@@ -23,6 +23,7 @@ final class PilotRuntime {
         var claude = claude
         claude?.systemPrompt = Pilot.systemPrompt
         claude?.workingDirectory = Self.conversations
+        claude?.effort = Pilot.effort
         let state = PilotState(restoring: results.load())
         (self.pilot, self.results, self.claude, self.game, self.state, self.view) = (pilot, results, claude, game, state, state.view)
     }

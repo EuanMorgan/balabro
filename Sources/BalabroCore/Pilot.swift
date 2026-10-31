@@ -10,10 +10,12 @@ import Foundation
 /// - Stop, the game exiting and an ending can all arrive in any order. The first records the result.
 public struct Pilot: Sendable {
     public static let systemPrompt = Prompt.pilotSystem
+    /// Over five runs each, the typical best hand went from about 15,000 to 38,000, for under a second more per decision.
+    public static let effort = "xhigh"
 
     public let text: GameText
     /// Long enough for a slow plan, short enough that a hung turn can't eat a run.
-    public var turnTimeout: Duration = .seconds(45)
+    public var turnTimeout: Duration = .seconds(90)
 
     public init(text: GameText) { self.text = text }
 

@@ -35,6 +35,13 @@ struct ClaudeCLITests {
         executable: URL(filePath: "/u/.local/bin/claude"), configDir: URL(filePath: "/u/.claude"),
         searchPath: "/u/.local/bin:/usr/bin", workingDirectory: URL(filePath: "/u/Balabro"))
 
+    @Test func effortIsOnTheCommandLineOnlyWhenSet() {
+        #expect(!invocation.arguments(forkFrom: nil).contains("--effort"))
+        var thinkingHarder = invocation
+        thinkingHarder.effort = "xhigh"
+        #expect(Array(thinkingHarder.arguments(forkFrom: SessionID(rawValue: "S1")).suffix(5)) == ["--effort", "xhigh", "--resume", "S1", "--fork-session"])
+    }
+
     @Test func firstTurnStartsAFreshConversationWithoutTools() {
         let args = invocation.arguments(forkFrom: nil)
         #expect(!args.contains("--resume") && !args.contains("--fork-session"))
