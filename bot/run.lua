@@ -130,7 +130,7 @@ end
 function run.main(ctx)
   local world, state = ctx.world, {}
   ctx.next_question = 0
-  world.start({ deck = ctx.deck, stake = ctx.stake })
+  world.start({ deck = ctx.deck, stake = ctx.stake, seed = ctx.seed })
   ctx.send("ready", world.version())
   while true do
     local moment = world.next_moment()

@@ -96,7 +96,7 @@ function world.start(setup)
   world.check()
   wait_for("the main menu", function() return G.STAGE == G.STAGES.MAIN_MENU and G.MAIN_MENU_UI end, 60)
   G.GAME.viewed_back = Back(G.P_CENTERS[setup.deck])
-  G.FUNCS.start_run(nil, { stake = setup.stake })
+  G.FUNCS.start_run(nil, { stake = setup.stake, seed = setup.seed })
   world.real_evaluate = G.FUNCS.evaluate_play
   G.FUNCS.evaluate_play = function(e)
     world.real_evaluate(e)

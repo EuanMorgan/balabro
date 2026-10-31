@@ -119,6 +119,8 @@ local co = coroutine.create(function()
     goal = os.getenv("BALABRO_BOT_GOAL") or "win",
     deck = os.getenv("BALABRO_BOT_DECK") or "b_red",
     stake = tonumber(os.getenv("BALABRO_BOT_STAKE") or "1"),
+    -- Only for comparing two versions of the bot on the same runs. Neither the solver nor Claude is told it.
+    seed = os.getenv("BALABRO_BOT_SEED"),
   })
   send("exit")
   love.event.quit(0)
