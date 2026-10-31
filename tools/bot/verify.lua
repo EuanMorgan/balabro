@@ -116,6 +116,28 @@ local function reopened_pack_matches(world)
   return before == after, before .. " then " .. after
 end
 
+-- A tag's pack opens right after the blind-select save, so a reload of that save must deal the same cards.
+local function reopened_tag_pack_matches(world)
+  add_tag(Tag("tag_buffoon"))
+  save_run()
+  local saved = saved_run()
+  local function names()
+    local out = {}
+    for i, card in ipairs(G.pack_cards.cards) do out[i] = card.config.center.key .. ":" .. tostring(card.edition and card.edition.type) end
+    return table.concat(out, ",")
+  end
+  for _, tag in ipairs(G.GAME.tags) do
+    if tag:apply_to_run({ type = "new_blind_choice" }) then break end
+  end
+  if world.next_moment() ~= "pack" then return false, "the tag didn't open its pack" end
+  local before = names()
+  G.FUNCS.start_run(nil, { savetext = saved })
+  if world.next_moment() ~= "pack" then return false, "the save came back as another moment" end
+  local after = names()
+  world.skip_pack()
+  return before == after, before .. " then " .. after
+end
+
 local function wait_frames(n) for _ = 1, n do coroutine.yield() end end
 
 function verify.main(world, solver, send)
@@ -123,13 +145,19 @@ function verify.main(world, solver, send)
   math.randomseed(os.time())
   local hands, matched, compared, blind_ok, blind_runs = 0, 0, 0, 0, 0
   local appraisal_ok, appraisal_detail
-  local reload_ok, reload_runs, pack_ok, pack_detail = 0, 0, nil, nil
+  local reload_ok, reload_runs, pack_ok, pack_detail, tag_pack_ok, tag_pack_detail = 0, 0, nil, nil, nil, nil
   while hands < HANDS do
     local moment = world.next_moment()
     if moment == "game_over" then error("the verify run lost, which rigged targets shouldn't allow")
     elseif moment == "win_screen" then world.continue_endless()
     elseif moment == "cash_out" then world.cash_out()
-    elseif moment == "blind" then world.select_blind()
+    elseif moment == "blind" then
+      if tag_pack_ok == nil then
+        tag_pack_ok, tag_pack_detail = reopened_tag_pack_matches(world)
+        if not tag_pack_ok then send("tag-pack-failed", tag_pack_detail) end
+      else
+        world.select_blind()
+      end
     elseif moment == "shop" then
       if appraisal_ok == nil then appraisal_ok, appraisal_detail = appraisal_is_clean(world, solver) end
       if pack_ok == nil and #G.shop_booster.cards > 0 then
@@ -174,8 +202,8 @@ function verify.main(world, solver, send)
     end
   end
   send("verified", "scores " .. matched .. "/" .. compared, "blindfold " .. blind_ok .. "/" .. blind_runs, "appraisal " .. tostring(appraisal_detail),
-    "reload " .. reload_ok .. "/" .. reload_runs, "pack " .. tostring(pack_ok))
-  send("ended", (matched == compared and blind_ok == blind_runs and appraisal_ok and reload_ok == reload_runs and pack_ok) and "pass" or "fail", 0, 0, 0)
+    "reload " .. reload_ok .. "/" .. reload_runs, "pack " .. tostring(pack_ok), "tag pack " .. tostring(tag_pack_ok))
+  send("ended", (matched == compared and blind_ok == blind_runs and appraisal_ok and reload_ok == reload_runs and pack_ok and tag_pack_ok) and "pass" or "fail", 0, 0, 0)
 end
 
 return verify

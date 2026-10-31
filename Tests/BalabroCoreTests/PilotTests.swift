@@ -64,8 +64,9 @@ struct BotFrameTests {
 
     @Test func theScorerAnswersWithFactsOrNothing() {
         #expect(ScorerFrame(line: "@@ready|1.0.1o") == .ready)
-        #expect(ScorerFrame(line: "@@scored|4|EXACT SCORES: a|b") == .scored(ScoreID(4), facts: "EXACT SCORES: a|b"))
-        #expect(ScorerFrame(line: "@@scored|4|") == .scored(ScoreID(4), facts: nil))
+        #expect(ScorerFrame(line: "@@scored|4||EXACT SCORES: a|b") == .scored(ScoreID(4), packFile: nil, facts: "EXACT SCORES: a|b"))
+        #expect(ScorerFrame(line: "@@scored|4||") == .scored(ScoreID(4), packFile: nil, facts: nil))
+        #expect(ScorerFrame(line: "@@scored|4|/tmp/decision-pack.jkr|Score check.") == .scored(ScoreID(4), packFile: URL(filePath: "/tmp/decision-pack.jkr"), facts: "Score check."))
         #expect(ScorerFrame(line: "LONG DT @ 24: 0.1") == nil)
     }
 

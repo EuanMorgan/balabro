@@ -6,6 +6,11 @@ import os
 /// It reads a copy of the player's save and never writes to their folder.
 /// Starting takes about 20 s and a request about 3 s, so it stays open for a while between requests and costs little waiting.
 actor Scorer {
+    struct Answer: Sendable {
+        var facts: String?
+        var packCards: [ShopItem.Card] = []
+    }
+
     private static let idleLimit: Duration = .seconds(600)
     private static let maxFailures = 3
 
@@ -14,7 +19,7 @@ actor Scorer {
     private let request = URL.applicationSupportDirectory.appending(path: "Balabro/scorer/request.jkr")
     private var process: BotProcess?
     private var starting: Task<Void, Never>?
-    private var pending: (id: ScoreID, answer: CheckedContinuation<String?, Never>)?
+    private var pending: (id: ScoreID, answer: CheckedContinuation<Answer, Never>)?
     private var nextID = 0
     private var lastUsed = ContinuousClock.now
     /// Failures in a row. A copy that keeps dying won't start working by being restarted at every decision.
@@ -36,35 +41,35 @@ actor Scorer {
         starting = nil
     }
 
-    /// The newest request wins: an older one still waiting gets nil, because the player has moved on.
-    func score(save: URL, within limit: Duration) async -> String? {
+    /// The newest request wins: an older one still waiting gets an empty answer, because the player has moved on.
+    func score(save: URL, unlocks: URL, within limit: Duration) async -> Answer {
         let deadline = ContinuousClock.now + limit
         do {
             let bytes = try Data(contentsOf: save)
             try FileManager.default.createDirectory(at: request.deletingLastPathComponent(), withIntermediateDirectories: true)
             try bytes.write(to: request, options: .atomic)
         } catch {
-            return nil
+            return Answer()
         }
         await warm()
-        guard let process else { return nil }
+        guard let process else { return Answer() }
         let id = ScoreID(nextID)
         nextID += 1
         return await withCheckedContinuation { answer in
-            finish(pending?.id, facts: nil)
+            finish(pending?.id, Answer())
             pending = (id, answer)
-            process.tell("score|\(id.value)|\(request.path)")
+            process.tell("score|\(id.value)|\(request.path)|\(unlocks.path)")
             Task {
                 try? await Task.sleep(until: deadline)
-                finish(id, facts: nil)
+                finish(id, Answer())
             }
         }
     }
 
-    private func finish(_ id: ScoreID?, facts: String?) {
+    private func finish(_ id: ScoreID?, _ answer: Answer) {
         guard let pending, pending.id == id else { return }
         self.pending = nil
-        pending.answer.resume(returning: facts)
+        pending.answer.resume(returning: answer)
     }
 
     private func launch() async {
@@ -85,16 +90,17 @@ actor Scorer {
         for await item in output {
             switch item {
             case .line(let line):
-                guard case .scored(let id, let facts)? = ScorerFrame(line: line) else { continue }
+                guard case .scored(let id, let packFile, let facts)? = ScorerFrame(line: line) else { continue }
                 failures = 0
-                finish(id, facts: facts)
+                let packCards = packFile.flatMap { try? Data(contentsOf: $0) }.flatMap { try? SaveFile.decodePackCards($0) }
+                finish(id, Answer(facts: facts, packCards: packCards ?? []))
             case .exited(let status):
                 process = nil
                 if !stopping {
                     failures += 1
                     Logger.balabro.error("The scorer stopped with status \(status)")
                 }
-                finish(pending?.id, facts: nil)
+                finish(pending?.id, Answer())
             }
         }
     }

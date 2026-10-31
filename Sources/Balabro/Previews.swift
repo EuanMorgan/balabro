@@ -21,7 +21,7 @@ enum Previews {
         ]
         for (name, view, showWhy, height, update) in states {
             let url = directory.appending(path: "overlay-\(name).png")
-            guard let png = snapshot(OverlayContent(view: view, ask: { _, _ in }, retry: {}, update: update, showWhy: showWhy), height: height) else { return 1 }
+            guard let png = snapshot(OverlayContent(view: view, ask: { _ in }, retry: {}, update: update, showWhy: showWhy), height: height) else { return 1 }
             try? png.write(to: url)
             print(url.path)
         }
