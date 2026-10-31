@@ -195,6 +195,9 @@ extension RunSnapshot {
 
         dollars = try game.int("dollars")
         ante = try resets.int("ante")
+        blindScale = BlindScale(
+            level: (try? game.require("modifiers").int("scaling")) ?? 1,
+            deckMultiplier: (try? game.require("starting_params").double("ante_scaling")) ?? 1)
         round = try game.int("round")
         handsLeft = try current.int("hands_left")
         discardsLeft = try current.int("discards_left")

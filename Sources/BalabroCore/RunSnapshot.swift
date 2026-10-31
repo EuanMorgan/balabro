@@ -20,6 +20,7 @@ public struct RunSnapshot: Sendable, Hashable, Codable {
     public var round: Int
     public var blind: Blind?
     public var blindSelect: BlindSelect
+    public var blindScale: BlindScale
     public var handsLeft: Int
     public var discardsLeft: Int
     public var handSize: Int

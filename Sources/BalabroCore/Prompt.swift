@@ -77,6 +77,10 @@ enum Prompt {
         Photograph or Hanging Chad, say the order in the step.
         - If the player holds a consumable that helps this decision, say when to use it in the steps.
         - \(moneyRule)
+        - In a shop or at a blind select, the state lists what the coming blinds need. Compare that with what the player's \
+        hands have been scoring, and say how they compare in Why. If they can't reach the Boss or the next ante's blinds, \
+        spending to fix that matters more than interest, because a lost run earns nothing and money still held when it \
+        ends was wasted.
         - Include the Score block at every play or discard decision, even when the steps only discard. Give one line \
         for the hand the steps play or aim for, written as "Full House, if you draw it" when it needs a draw. Then add \
         one line for the hand the player would most likely play instead, starting "Instead,", even if it's a bigger \
@@ -324,11 +328,16 @@ enum Prompt {
             let reward = text[CenterKey(rawValue: tag.rawValue)]?.text.joined(separator: " ") ?? ""
             return ". Skip reward: \(name(tag, text))" + (reward.isEmpty ? "" : ", \(reward)")
         }
+        func needs(_ state: BlindSelect.State, _ target: Double) -> String {
+            state == .defeated || state == .skipped ? "" : ", needs \(chips(target))"
+        }
+        let scale = s.blindScale
         let bossRule = text[b.bossKey]?.text.joined(separator: " ") ?? ""
         return [
-            "Small Blind: \(b.small.rawValue)\(b.small == .select || b.small == .upcoming ? skip(b.smallSkipTag) : "")",
-            "Big Blind: \(b.big.rawValue)\(b.big == .select || b.big == .upcoming ? skip(b.bigSkipTag) : "")",
-            "Boss Blind: \(b.boss.rawValue). \(name(b.bossKey, text))" + (bossRule.isEmpty ? "" : ": \(bossRule)"),
+            "Small Blind: \(b.small.rawValue)\(needs(b.small, scale.small(ante: s.ante)))\(b.small == .select || b.small == .upcoming ? skip(b.smallSkipTag) : "")",
+            "Big Blind: \(b.big.rawValue)\(needs(b.big, scale.big(ante: s.ante)))\(b.big == .select || b.big == .upcoming ? skip(b.bigSkipTag) : "")",
+            "Boss Blind: \(b.boss.rawValue)\(needs(b.boss, scale.boss(b.bossKey, ante: s.ante))). \(name(b.bossKey, text))" + (bossRule.isEmpty ? "" : ": \(bossRule)"),
+            "Next ante's Small Blind needs \(chips(scale.small(ante: s.ante + 1))).",
         ]
     }
 
