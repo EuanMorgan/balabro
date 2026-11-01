@@ -36,12 +36,13 @@ internal static class Program
     }
 }
 
-/// Joins the panel, the engine and the tray icon.
+/// Joins the panel, the engine, the tray icon and the foreground guard.
 internal sealed class Shell : IDisposable
 {
     private readonly EngineLink _engine;
     private readonly PanelWindow _panel;
     private readonly WindowPlacement _placement = new();
+    private ForegroundGuard? _guard;
     private Forms.NotifyIcon? _tray;
 
     public Shell(string[] args)
@@ -78,6 +79,8 @@ internal sealed class Shell : IDisposable
             : "Balabro's engine stopped. The log is in the tray menu's logs folder."));
         _engine.Start();
 
+        _guard = new ForegroundGuard(() => _panel.PilotIsActive, _panel.KeepOnTop,
+            enabled: Environment.GetEnvironmentVariable("BALABRO_NO_FOCUS_GUARD") != "1");
         _tray = MakeTray();
     }
 
@@ -150,6 +153,7 @@ internal sealed class Shell : IDisposable
     {
         Log.Write("Balabro quitting");
         _placement.Save(_panel);
+        _guard?.Dispose();
         if (_tray is not null)
         {
             _tray.Visible = false;
