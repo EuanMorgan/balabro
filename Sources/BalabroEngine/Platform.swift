@@ -98,6 +98,17 @@ public enum Platform {
         #endif
     }
 
+    /// claude's arguments as the process should get them. Foundation's `Process` on Windows leaves an empty argument
+    /// out of the command line, so `--tools ""` would take the next flag as its value. There the empty value joins
+    /// its flag as `--tools=`, which claude reads the same way. The Mac passes the arguments as they are.
+    static func claudeArguments(_ arguments: [String]) -> [String] {
+        #if os(Windows)
+        EmptyArguments.joinedToTheirFlags(arguments)
+        #else
+        arguments
+        #endif
+    }
+
     #if !os(Windows)
     /// The app's environment, plus the account basics a process started with an empty environment lacks.
     private static var userEnvironment: [String: String] {
@@ -206,4 +217,18 @@ public enum Platform {
     #if !os(Windows)
     private static let logger = Logger(subsystem: "com.euanmorgan.balabro", category: "app")
     #endif
+}
+
+/// Outside the `#if` so the Mac tests check it too.
+enum EmptyArguments {
+    /// `["--tools", "", "-p"]` becomes `["--tools=", "-p"]`. An empty argument after anything but a `--flag` stays.
+    static func joinedToTheirFlags(_ arguments: [String]) -> [String] {
+        arguments.reduce(into: []) { out, argument in
+            if argument.isEmpty, let flag = out.last, flag.hasPrefix("--"), !flag.contains("=") {
+                out[out.count - 1] = flag + "="
+            } else {
+                out.append(argument)
+            }
+        }
+    }
 }

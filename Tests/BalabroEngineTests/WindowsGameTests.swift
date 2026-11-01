@@ -43,4 +43,12 @@ struct WindowsGameTests {
         #expect(try Data(contentsOf: runtime.appending(path: "love.exe")) == exe.prefix(3000))
         #expect(try Data(contentsOf: runtime.appending(path: "SDL2.dll")) == Data("SDL".utf8))
     }
+
+    /// Windows' command line can't carry an empty argument through Foundation, so `--tools ""` goes as `--tools=`.
+    @Test func emptyValuesJoinTheirFlags() {
+        #expect(EmptyArguments.joinedToTheirFlags(["-p", "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands"])
+            == ["-p", "--tools=", "--strict-mcp-config", "--setting-sources=", "--disable-slash-commands"])
+        #expect(EmptyArguments.joinedToTheirFlags(["", "-x", "", "--a=b", ""]) == ["", "-x", "", "--a=b", ""])
+        #expect(EmptyArguments.joinedToTheirFlags(["--system-prompt", "one\ntwo", "--model", "m"]) == ["--system-prompt", "one\ntwo", "--model", "m"])
+    }
 }

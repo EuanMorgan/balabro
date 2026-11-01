@@ -9,7 +9,7 @@ enum ClaudeProcess {
         AsyncStream { continuation in
             let process = Process()
             process.executableURL = invocation.executable
-            process.arguments = invocation.arguments(forkFrom: request.forkFrom)
+            process.arguments = Platform.claudeArguments(invocation.arguments(forkFrom: request.forkFrom))
             process.environment = Platform.claudeEnvironment(invocation)
             process.currentDirectoryURL = invocation.workingDirectory
             let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
