@@ -66,8 +66,8 @@ await host.serve(engine)   // returns when the Windows app closes stdin
 
 **The Windows app is two processes joined by JSON lines on stdin and stdout.** WPF starts `balabro-engine.exe` without a console window, inside a job object that kills the engine, claude and the bot copies when the app exits, even after a crash. Closing stdin also tells the engine to exit, the rule the bot already follows.
 
-- The engine sends `coach` and `pilot` lines, each carrying the whole current `CoachView` or `PilotView` as JSON, and a `capture` line when a turn needs a screenshot.
-- The app sends one line per player action. The actions are named after the runtime methods `OverlayView` calls today (`ask`, `retry`, `refresh`, `adviseNextRun`, `setGoal`, `playForMe`, `stopPilot`, `dismissPilot`), plus `screenshot` with the PNG in base64.
+- The engine sends `coach` and `pilot` lines, each carrying the whole current `CoachView` or `PilotView` as JSON, and a `capture` line when a turn needs a screenshot. It sends an `update` line for each newer release with the Windows zip, from the same `UpdateCheck` the Mac uses.
+- The app sends one line per player action. The actions are named after the runtime methods `OverlayView` calls today (`ask`, `retry`, `refresh`, `adviseNextRun`, `setGoal`, `playForMe`, `stopPilot`, `dismissPilot`), plus `screenshot` with the PNG in base64, and `stats`, which the engine answers with a `stats` line carrying the `StatsPage` the Mac's stats window draws.
 - The views are encoded with `Codable`, so a field added to a view reaches the wire with no extra edit. The text the panel shows for a problem or a score line moves out of `OverlayView` into the core, next to the types it describes. The Mac panel and the wire then use the same words.
 
 **Why WPF.** The owner's PC can build and run it, and agents there can take screenshots of it. WPF's topmost, no-activate windows, `RegisterHotKey`, the tray icon and `PrintWindow` are well documented. Avalonia would run on the Mac too, but with a real Windows machine available that matters less than WPF's simpler Win32 handling. An HTML panel in WebView2 would add a third language for no gain.
