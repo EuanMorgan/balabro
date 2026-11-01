@@ -590,7 +590,7 @@ public enum Problem: Sendable, Hashable {
         switch self {
         case .noRun: "Start a run in Balatro first, then ask again."
         case .screenRecordingDenied:
-            "Couldn't take a screenshot of Balatro. On a Mac, check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
+            "Couldn't see Balatro's window. Make sure it's open, not minimised, and in Borderless mode. On a Mac, also check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
         case .saveUnreadable: "Couldn't read Balatro's save file. Advice resumes at the next save."
         case .turnFailed(.notLoggedIn): "Claude isn't logged in. Run `claude` in a terminal and log in, then retry."
         case .turnFailed(.cliNotFound): "Couldn't find the claude command. Install Claude Code, then restart Balabro."

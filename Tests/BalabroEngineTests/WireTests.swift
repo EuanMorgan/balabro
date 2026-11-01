@@ -98,6 +98,14 @@ struct WireTests {
         try expectLine(.coach(state.view), matches: "coach-problem")
     }
 
+    /// The words have to fit both systems, because the core doesn't know which one it runs on.
+    @Test func noScreenshot() throws {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("07-pack-opening")))
+        _ = coach.reduce(&state, .screenshot(CaptureID(0), png: nil))
+        try expectLine(.coach(state.view), matches: "coach-no-screenshot")
+    }
+
     @Test func pilotPlaying() throws {
         let view = PilotView(
             status: .askingClaude, startedAt: Date(timeIntervalSince1970: 1_790_000_000), goal: .win,

@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Balabro.Windows", "Balabro.Windows\Balabro.Windows.csproj", "{0BA7A2FB-56CD-4E8B-8B0C-E9A8E0B37BD1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Balabro.Windows.Tests", "Balabro.Windows.Tests\Balabro.Windows.Tests.csproj", "{312A6230-87A3-4043-B612-68BF706FB78B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0BA7A2FB-56CD-4E8B-8B0C-E9A8E0B37BD1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BA7A2FB-56CD-4E8B-8B0C-E9A8E0B37BD1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BA7A2FB-56CD-4E8B-8B0C-E9A8E0B37BD1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BA7A2FB-56CD-4E8B-8B0C-E9A8E0B37BD1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{312A6230-87A3-4043-B612-68BF706FB78B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{312A6230-87A3-4043-B612-68BF706FB78B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{312A6230-87A3-4043-B612-68BF706FB78B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{312A6230-87A3-4043-B612-68BF706FB78B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

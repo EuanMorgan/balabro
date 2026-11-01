@@ -2,7 +2,7 @@
 
 # Balabro
 
-Balabro is a small macOS panel that sits over Balatro and coaches you through your run with Claude. Each time you draw a hand, visit the shop, open a pack or reach a blind select, it tells you what to do first and what the hand will score, then why, then a short lesson.
+Balabro is a small panel for macOS and Windows that sits over Balatro and coaches you through your run with Claude. Each time you draw a hand, visit the shop, open a pack or reach a blind select, it tells you what to do first and what the hand will score, then why, then a short lesson.
 
 ![The Balabro panel showing advice for a hand](docs/overlay.png)
 
@@ -14,7 +14,7 @@ Balabro reads the save file the game already writes, so it needs no mods and cha
 - Balatro from Steam.
 - [Claude Code](https://claude.com/claude-code), installed and logged in. Balabro runs the `claude` command with your Claude subscription, so it needs no API key. Each piece of advice is one Claude Opus turn, which counts towards your plan's usage limits.
 
-A Windows version is being built. [design/WINDOWS.md](design/WINDOWS.md) explains how it will work.
+On Windows, see [Windows](#windows) below.
 
 ## Install
 
@@ -50,6 +50,29 @@ Balabro looks for `claude` the way your terminal does. To see what it found, run
 ```
 
 If it finds nothing, check that `claude` works in a new terminal window.
+
+## Windows
+
+You need Windows 10 or 11, Balatro from Steam, and Claude Code installed and logged in, so that `claude` works in a new terminal.
+
+1. Download `Balabro-<version>-windows-x64.zip` and unzip it anywhere, such as your Documents folder.
+2. Open `Balabro.exe`. Windows SmartScreen blocks it the first time, because it isn't signed. Click **More info**, then **Run anyway**.
+3. In Balatro, open **Options > Settings > Video** and set the display to **Borderless**. Nothing can show over Exclusive Fullscreen.
+4. The panel appears at the top right of the screen, and a spade appears in the tray. If you can't see the spade, click the arrow by the clock. Drag the panel by its title. It stays on top of Balatro and remembers where you put it.
+5. Play as usual. Advice appears a few seconds after each decision. To ask a question, press **Ctrl+Alt+Space** or click the box at the bottom of the panel, type, and press **Enter**. The game gets the keyboard back when you press Enter, or **Escape** to go back without asking. Clicking anywhere else on the panel leaves the keyboard with the game.
+6. Right-click the spade for **Show overlay**, **Move overlay to the corner**, **Open logs folder** and **Quit**. Quitting closes everything Balabro started, including its own copies of the game.
+
+The infinity sign, the play button and the refresh arrow work as on the Mac. The Windows version doesn't update itself or show stats yet. To update, quit Balabro, download the new zip and unzip it over the old folder.
+
+If something is wrong, open a terminal in the Balabro folder and check each part on its own:
+
+```powershell
+.\balabro-engine.exe --locate-claude
+.\balabro-engine.exe --print-prompt "$env:APPDATA\Balatro\1\save.jkr"
+.\balabro-engine.exe --print-exact-scores "$env:APPDATA\Balatro\1\save.jkr"
+```
+
+The first shows which `claude` Balabro found, the second what Claude is told about your current save, and the third the scores from Balabro's hidden copy of the game. Both logs, `app.log` and `engine.log`, are in the logs folder from the tray menu. [design/WINDOWS.md](design/WINDOWS.md) explains how the Windows version works.
 
 ## How it works
 

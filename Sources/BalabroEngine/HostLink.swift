@@ -110,7 +110,7 @@ public final class HostLink {
     /// Returns when the app closes stdin.
     public func serve(_ engine: Engine) async {
         let font = try? await engine.game?.extract("resources/fonts/m6x11plus.ttf")
-        send(.hello(version: Self.version, fontPath: font.map(Platform.path)))
+        send(.hello(version: Platform.version, fontPath: font.map(Platform.path)))
         let watchers = [watch { .coach(engine.coach.view) }, watch { .pilot(engine.pilot.view) }]
         await listen { handle($0, engine) }
         watchers.forEach { $0.cancel() }
@@ -169,6 +169,4 @@ public final class HostLink {
     private func write(_ line: Data) {
         try? output.write(contentsOf: line)
     }
-
-    private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 }

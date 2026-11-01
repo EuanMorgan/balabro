@@ -26,3 +26,15 @@ jobs:
       # may still be writing the bundle's Info.plist, which fails about half the time. The native one has no such step.
       - run: swift build --build-system native
       - run: swift test --build-system native
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test windows/Balabro.Windows.sln
+      - name: Package
+        shell: pwsh
+        run: scripts/make-windows.ps1 0.0.0-ci.${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Balabro-0.0.0-ci.${{ github.run_number }}-windows-x64
+          path: dist/Balabro-0.0.0-ci.${{ github.run_number }}-windows-x64.zip
+          if-no-files-found: error
