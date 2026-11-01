@@ -14,7 +14,7 @@ public final class CoachRuntime {
     @ObservationIgnored private var state: CoachState
     @ObservationIgnored private let coach: Coach
     @ObservationIgnored private let store: RunStore
-    @ObservationIgnored private let settings: URL
+    @ObservationIgnored private let settings: SharedFiles
     @ObservationIgnored private let claude: ClaudeInvocation?
     @ObservationIgnored private let scorer: Scorer?
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
@@ -25,7 +25,7 @@ public final class CoachRuntime {
     /// `--resume` only finds sessions filed under the cwd the CLI ran in, so every turn uses this one.
     static let conversations = Platform.dataFolder.appending(path: "conversations")
 
-    init(coach: Coach, store: RunStore, settings: URL, claude: ClaudeInvocation?, scorer: Scorer?, capture: @escaping @Sendable () async -> Data?) {
+    init(coach: Coach, store: RunStore, settings: SharedFiles, claude: ClaudeInvocation?, scorer: Scorer?, capture: @escaping @Sendable () async -> Data?) {
         let state = CoachState(restoring: store.loadAll(), goal: Settings.load(from: settings).goal)
         (self.coach, self.store, self.settings, self.claude, self.scorer, self.capture) = (coach, store, settings, claude, scorer, capture)
         (self.state, self.view) = (state, state.view)

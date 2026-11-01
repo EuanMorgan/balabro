@@ -99,7 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showStats() {
         statsWindow?.close()
-        let window = makeStatsWindow(StatsData.load(savesRoot: savesRoot, store: .default), text: gameText)
+        guard let engine else { return }
+        let window = makeStatsWindow(StatsData.load(savesRoot: savesRoot, store: engine.runs), text: gameText)
         statsWindow = window
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)

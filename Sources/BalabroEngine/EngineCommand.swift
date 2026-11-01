@@ -91,7 +91,8 @@ public enum EngineCommand {
         func say(_ line: String) { try? FileHandle.standardOutput.write(contentsOf: Data((line + "\n").utf8)) }
         let game = GameInstall.find()
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: PilotRuntime.conversations)
-        let pilot = PilotRuntime(pilot: Pilot(text: await game?.loadText() ?? .missing), results: .default, claude: claude, game: game)
+        let results = PilotResults(files: await Machine.load().open())
+        let pilot = PilotRuntime(pilot: Pilot(text: await game?.loadText() ?? .missing), results: results, claude: claude, game: game)
         pilot.start(goal: goal)
         var last = ""
         while pilot.view.status != .finished {

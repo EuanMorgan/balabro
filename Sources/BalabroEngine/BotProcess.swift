@@ -92,11 +92,11 @@ final class BotProcess: Sendable {
     func kill() { Platform.stop(process) }
 }
 
-/// `Balabro/pilot/results.json`. Written whole and atomically, like `RunStore`.
+/// `pilot/results.json` in the shared files. Written whole and atomically, like `RunStore`.
 struct PilotResults: Sendable {
-    let file: URL
+    let files: SharedFiles
 
-    static var `default`: PilotResults { PilotResults(file: Platform.dataFolder.appending(path: "pilot/results.json")) }
+    private static let path = "pilot/results.json"
 
     private static let infinity = "inf"
 
@@ -104,7 +104,7 @@ struct PilotResults: Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: Self.infinity, negativeInfinity: "-inf", nan: "nan")
-        return (try? Data(contentsOf: file)).flatMap { try? decoder.decode([PilotResult].self, from: $0) } ?? []
+        return files.read(Self.path).flatMap { try? decoder.decode([PilotResult].self, from: $0) } ?? []
     }
 
     func save(_ results: [PilotResult]) {
@@ -112,8 +112,7 @@ struct PilotResults: Sendable {
         encoder.dateEncodingStrategy = .iso8601
         encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: Self.infinity, negativeInfinity: "-inf", nan: "nan")
         do {
-            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try encoder.encode(results).write(to: file, options: .atomic)
+            try files.write(encoder.encode(results), to: Self.path)
         } catch {
             Platform.log("Couldn't save the bot's results: \(error)")
         }
