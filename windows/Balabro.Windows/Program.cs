@@ -43,6 +43,9 @@ internal sealed class Shell : IDisposable
     private readonly WindowPlacement _placement = new();
     private ForegroundGuard? _guard;
     private Forms.NotifyIcon? _tray;
+    private string? _syncFolder;
+    private readonly Forms.ToolStripMenuItem _syncingThrough = new() { Enabled = false, Visible = false };
+    private readonly Forms.ToolStripMenuItem _stopSyncing = new("Stop syncing") { Visible = false };
 
     public Shell(string[] args)
     {
@@ -86,8 +89,17 @@ internal sealed class Shell : IDisposable
         switch (message)
         {
             case Hello hello:
-                Log.Write($"Engine {hello.Version}, font {hello.FontPath ?? "none"}");
+                Log.Write($"Engine {hello.Version}, font {hello.FontPath ?? "none"}, syncing through {hello.SyncFolder ?? "nothing"}");
                 Theme.LoadPixelFont(hello.FontPath);
+                _syncFolder = hello.SyncFolder;
+                _syncingThrough.Text = $"Syncing through {Path.GetFileName(Path.TrimEndingDirectorySeparator(hello.SyncFolder ?? ""))}";
+                _syncingThrough.Visible = _stopSyncing.Visible = hello.SyncFolder is not null;
+                break;
+            // A new engine reads the runs from their new place, with nothing left from the old one.
+            case SyncFolderSet set:
+                Log.Write($"Sync folder is now {set.Path ?? "none"}{(set.Error is null ? "" : $", because {set.Error}")}");
+                if (set.Error is not null) Forms.MessageBox.Show(set.Error, "Balabro", Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                _engine.Start();
                 break;
             case CoachMessage coach:
                 _panel.Show(coach.View);
@@ -119,6 +131,12 @@ internal sealed class Shell : IDisposable
             WindowPlacement.MoveToCorner(_panel);
             _placement.Save(_panel);
         });
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Sync with another computer…", null, (_, _) => ChooseSyncFolder());
+        menu.Items.Add(_syncingThrough);
+        _stopSyncing.Click += (_, _) => _engine.Send(Wire.SetSyncFolder(null));
+        menu.Items.Add(_stopSyncing);
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Open logs folder", null, (_, _) =>
         {
             Directory.CreateDirectory(Paths.LogsFolder);
@@ -137,6 +155,19 @@ internal sealed class Shell : IDisposable
         };
         tray.DoubleClick += (_, _) => ShowOverlay();
         return tray;
+    }
+
+    private void ChooseSyncFolder()
+    {
+        var iCloudDrive = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "iCloudDrive");
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "Choose a folder iCloud Drive, OneDrive or Dropbox keeps the same on your other computer",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true,
+            InitialDirectory = _syncFolder ?? (Directory.Exists(iCloudDrive) ? iCloudDrive : ""),
+        };
+        if (dialog.ShowDialog() == Forms.DialogResult.OK) _engine.Send(Wire.SetSyncFolder(dialog.SelectedPath));
     }
 
     private void ShowOverlay()

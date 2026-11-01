@@ -11,7 +11,8 @@ namespace Balabro.Windows;
 
 public abstract record HostMessage;
 
-public sealed record Hello(string Version, string? FontPath) : HostMessage;
+/// `SyncFolder` is null when this computer doesn't sync.
+public sealed record Hello(string Version, string? FontPath, string? SyncFolder) : HostMessage;
 
 public sealed record CoachMessage(CoachView View) : HostMessage;
 
@@ -19,6 +20,9 @@ public sealed record PilotMessage(PilotView View) : HostMessage;
 
 /// Answered with a `screenshot` line carrying the same id.
 public sealed record CaptureRequest(int Id) : HostMessage;
+
+/// The answer to a `setSyncFolder` line. The app then restarts the engine, which reads the runs from `Path`.
+public sealed record SyncFolderSet(string? Path, string? Error) : HostMessage;
 
 public enum CoachStatus { WaitingForRun, LookingAtPack, Thinking, Answering, Ready }
 
@@ -173,15 +177,17 @@ public static class Wire
         var type = root.GetProperty("type").GetString();
         return type switch
         {
-            "hello" => new Hello(
-                root.GetProperty("version").GetString() ?? "dev",
-                root.TryGetProperty("fontPath", out var font) && font.ValueKind == JsonValueKind.String ? font.GetString() : null),
+            "hello" => new Hello(root.GetProperty("version").GetString() ?? "dev", OptionalString(root, "fontPath"), OptionalString(root, "syncFolder")),
             "coach" => new CoachMessage(View<CoachView>(root)),
             "pilot" => new PilotMessage(View<PilotView>(root)),
             "capture" => new CaptureRequest(root.GetProperty("id").GetInt32()),
+            "syncFolderSet" => new SyncFolderSet(OptionalString(root, "path"), OptionalString(root, "error")),
             _ => throw new JsonException($"Unknown line type {type}"),
         };
     }
+
+    private static string? OptionalString(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     private static T View<T>(JsonElement root) =>
         root.GetProperty("view").Deserialize<T>(Options) ?? throw new JsonException("Empty view");
@@ -195,6 +201,8 @@ public static class Wire
     public static string PlayForMe(CoachGoal goal) => Line(new { type = "playForMe", goal = Name(goal) });
     public static string StopPilot() => Line(new { type = "stopPilot" });
     public static string DismissPilot() => Line(new { type = "dismissPilot" });
+    /// Null stops syncing.
+    public static string SetSyncFolder(string? path) => Line(new { type = "setSyncFolder", path });
     public static string Screenshot(int id, byte[]? png) => Line(new { type = "screenshot", id, png = png is null ? null : Convert.ToBase64String(png) });
 
     private static string Name(CoachGoal goal) => goal == CoachGoal.Naneinf ? "naneinf" : "win";
