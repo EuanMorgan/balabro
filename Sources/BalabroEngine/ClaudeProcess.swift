@@ -3,10 +3,13 @@ import Foundation
 
 /// Spawns one `claude -p` per turn and streams its output.
 enum ClaudeProcess {
-    /// Cancelling the consuming task ends the process (`Platform.interrupt`). The forked session the
-    /// process was writing is abandoned; `Coach` never forks from it.
-    static func run(_ request: TurnRequest, with invocation: ClaudeInvocation) -> AsyncStream<TurnOutput> {
-        AsyncStream { continuation in
+    /// Cancelling the task reading `output` ends the process (`Platform.interrupt`), and `ended` finishes once it has
+    /// exited. The forked session the process was writing is abandoned; `Coach` never forks from it.
+    static func run(_ request: TurnRequest, with invocation: ClaudeInvocation) -> (output: AsyncStream<TurnOutput>, ended: Task<Void, Never>) {
+        let (gone, processGone) = AsyncStream.makeStream(of: Void.self)
+        // Detached and never cancelled, so awaiting it waits for the process even from a cancelled task.
+        let ended = Task.detached { for await _ in gone {} }
+        let output = AsyncStream<TurnOutput> { continuation in
             let process = Process()
             process.executableURL = invocation.executable
             process.arguments = Platform.claudeArguments(invocation.arguments(forkFrom: request.forkFrom))
@@ -18,6 +21,7 @@ enum ClaudeProcess {
             process.terminationHandler = {
                 exited.yield($0.terminationStatus)
                 exited.finish()
+                processGone.finish()
             }
 
             do {
@@ -26,6 +30,7 @@ enum ClaudeProcess {
             } catch {
                 continuation.yield(.failed(.cliNotFound))
                 continuation.finish()
+                processGone.finish()
                 return
             }
 
@@ -51,6 +56,7 @@ enum ClaudeProcess {
                 Platform.interrupt(process)
             }
         }
+        return (output, ended)
     }
 }
 
