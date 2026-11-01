@@ -15,6 +15,8 @@ import sys
 import threading
 import time
 
+# Windows consoles and pipes default to a code page with no ♠ in it.
+sys.stdout.reconfigure(encoding="utf-8")
 engine, saves = sys.argv[1], sys.argv[2]
 proc = subprocess.Popen([engine, "--saves-root", saves], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
 lines = queue.Queue()
