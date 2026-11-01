@@ -14,6 +14,8 @@ Balabro reads the save file the game already writes, so it needs no mods and cha
 - Balatro from Steam.
 - [Claude Code](https://claude.com/claude-code), installed and logged in. Balabro runs the `claude` command with your Claude subscription, so it needs no API key. Each piece of advice is one Claude Opus turn, which counts towards your plan's usage limits.
 
+A Windows version is being built. [design/WINDOWS.md](design/WINDOWS.md) explains how it will work.
+
 ## Install
 
 1. Download `Balabro-<version>.zip` from the [latest release](https://github.com/EuanMorgan/balabro/releases/latest) and unzip it.

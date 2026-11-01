@@ -1,0 +1,55 @@
+{
+  "type": "coach",
+  "view": {
+    "advice": {
+      "doNow": [
+        "Discard J♦ 4♠ 3♥",
+        "Play K♥ K♣ 7♠ 7♦"
+      ],
+      "goal": "Build towards a Flush.",
+      "lesson": {
+        "body": "Early blinds are cleared by pairs.",
+        "heading": "Lesson 3",
+        "number": 3,
+        "title": "Pairs first"
+      },
+      "rest": "",
+      "why": [
+        "The Kings are your best pair."
+      ]
+    },
+    "canRetry": false,
+    "chipsNeeded": 300,
+    "goal": "win",
+    "headline": "Ante 1 · bl_small",
+    "sawScreen": false,
+    "score": [
+      {
+        "clears": false,
+        "isAlternative": false,
+        "label": "Two Pair",
+        "note": "Leaves 208 to score",
+        "sum": {
+          "chips": "46",
+          "isEstimate": false,
+          "mult": "2",
+          "total": "92"
+        }
+      },
+      {
+        "clears": false,
+        "isAlternative": true,
+        "label": "Instead: Pair",
+        "sum": {
+          "chips": "30",
+          "isEstimate": false,
+          "mult": "2",
+          "total": "60"
+        }
+      }
+    ],
+    "status": "ready",
+    "thread": [],
+    "waitingCaptions": []
+  }
+}

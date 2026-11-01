@@ -1,0 +1,23 @@
+{
+  "type": "coach",
+  "view": {
+    "canRetry": true,
+    "chipsNeeded": 300,
+    "goal": "win",
+    "headline": "Waiting for your next move",
+    "placeholder": {
+      "detail": "Ask anything about this run below.",
+      "title": "Ready"
+    },
+    "problem": {
+      "kind": "turnFailed",
+      "message": "Claude isn't logged in. Run `claude` in a terminal and log in, then retry.",
+      "reason": "notLoggedIn"
+    },
+    "sawScreen": false,
+    "score": [],
+    "status": "ready",
+    "thread": [],
+    "waitingCaptions": []
+  }
+}

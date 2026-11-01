@@ -3,14 +3,17 @@ import Foundation
 
 /// Spawns one `claude -p` per turn and streams its output.
 enum ClaudeProcess {
-    /// Cancelling the consuming task sends SIGINT, then SIGTERM after 2 s. The forked session the
-    /// process was writing is abandoned; `Coach` never forks from it.
-    static func run(_ request: TurnRequest, with invocation: ClaudeInvocation) -> AsyncStream<TurnOutput> {
-        AsyncStream { continuation in
+    /// Cancelling the task reading `output` ends the process (`Platform.interrupt`), and `ended` finishes once it has
+    /// exited. The forked session the process was writing is abandoned; `Coach` never forks from it.
+    static func run(_ request: TurnRequest, with invocation: ClaudeInvocation) -> (output: AsyncStream<TurnOutput>, ended: Task<Void, Never>) {
+        let (gone, processGone) = AsyncStream.makeStream(of: Void.self)
+        // Detached and never cancelled, so awaiting it waits for the process even from a cancelled task.
+        let ended = Task.detached { for await _ in gone {} }
+        let output = AsyncStream<TurnOutput> { continuation in
             let process = Process()
             process.executableURL = invocation.executable
-            process.arguments = invocation.arguments(forkFrom: request.forkFrom)
-            process.environment = invocation.environment(inheriting: ClaudeLocator.userEnvironment)
+            process.arguments = Platform.claudeArguments(invocation.arguments(forkFrom: request.forkFrom))
+            process.environment = Platform.claudeEnvironment(invocation)
             process.currentDirectoryURL = invocation.workingDirectory
             let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
             (process.standardInput, process.standardOutput, process.standardError) = (stdin, stdout, stderr)
@@ -18,6 +21,7 @@ enum ClaudeProcess {
             process.terminationHandler = {
                 exited.yield($0.terminationStatus)
                 exited.finish()
+                processGone.finish()
             }
 
             do {
@@ -26,6 +30,7 @@ enum ClaudeProcess {
             } catch {
                 continuation.yield(.failed(.cliNotFound))
                 continuation.finish()
+                processGone.finish()
                 return
             }
 
@@ -34,54 +39,38 @@ enum ClaudeProcess {
                 try? stdin.fileHandleForWriting.write(contentsOf: ClaudeInvocation.stdinLine(request.message))
                 try? stdin.fileHandleForWriting.close()
 
-                async let errorText = String(decoding: (try? await stderr.fileHandleForReading.bytes.reduce(into: Data()) { $0.append($1) }) ?? Data(), as: UTF8.self)
+                async let errorLines = LineReader.lines(from: stderr.fileHandleForReading).reduce(into: []) { $0.append($1) }
                 var decoder = StreamDecoder()
-                do {
-                    for try await line in stdout.fileHandleForReading.bytes.lines {
-                        if let output = decoder.feed(Data(line.utf8)) { continuation.yield(output) }
-                    }
-                } catch {}
+                for await line in LineReader.lines(from: stdout.fileHandleForReading) {
+                    if let output = decoder.feed(Data(line.utf8)) { continuation.yield(output) }
+                }
                 var status: Int32 = -1
                 for await code in exit { status = code }
-                if let output = decoder.finish(status: status, stderr: await errorText) { continuation.yield(output) }
+                if let output = decoder.finish(status: status, stderr: await errorLines.joined(separator: "\n")) { continuation.yield(output) }
                 continuation.finish()
             }
 
             continuation.onTermination = { reason in
                 guard case .cancelled = reason else { return }
                 reader.cancel()
-                process.interrupt()
-                let pid = process.processIdentifier
-                DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                    if process.isRunning { kill(pid, SIGTERM) }
-                }
+                Platform.interrupt(process)
             }
         }
+        return (output, ended)
     }
 }
 
-/// Finds `claude` and the user's config dir for an app launched from Finder, which inherits
+/// Finds `claude` and the config dir it should use. On the Mac, an app launched from Finder inherits
 /// neither `~/.local/bin` on PATH nor `CLAUDE_CONFIG_DIR` from `~/.zshrc`.
 enum ClaudeLocator {
-    /// Order: the user's override, then the last result that still works, then their login shell,
-    /// then well-known install paths. Every candidate must pass `claude --version`, and the winner is
-    /// saved, so the login-shell probe runs once, not per launch.
+    /// Order: the user's override, then the last result that still works, then `Platform.claudeCandidates`.
+    /// Every candidate must pass `claude --version`, and the winner is saved, so the Mac's login-shell probe
+    /// runs once, not per launch.
     static func resolve(override: ClaudeInvocation?, workingDirectory: URL) async -> ClaudeInvocation? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        var candidates: [() async -> ClaudeInvocation?] = [
+        let candidates: [@Sendable () async -> ClaudeInvocation?] = [
             { override },
             { saved(workingDirectory: workingDirectory) },
-            { await loginShell(workingDirectory: workingDirectory) },
-        ]
-        let shellPath = "/usr/bin:/bin:/usr/sbin:/sbin"
-        for path in [".local/bin/claude", ".claude/local/claude"].map({ home.appending(path: $0).path }) + ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"] {
-            candidates.append {
-                ClaudeInvocation(
-                    executable: URL(filePath: path), configDir: nil,
-                    searchPath: "\(URL(filePath: path).deletingLastPathComponent().path):/opt/homebrew/bin:\(shellPath)",
-                    workingDirectory: workingDirectory)
-            }
-        }
+        ] + Platform.claudeCandidates(workingDirectory: workingDirectory)
         for candidate in candidates {
             guard let invocation = await candidate(), await works(invocation) else { continue }
             save(invocation)
@@ -91,24 +80,13 @@ enum ClaudeLocator {
     }
 
     private static func works(_ invocation: ClaudeInvocation) async -> Bool {
-        guard FileManager.default.isExecutableFile(atPath: invocation.executable.path) else { return false }
-        let env = invocation.environment(inheriting: userEnvironment)
-        return await Command.run(invocation.executable, ["--version"], environment: env, timeout: .seconds(10))?.status == 0
-    }
-
-    /// The app's environment, plus the account basics a process started with an empty environment lacks.
-    static var userEnvironment: [String: String] {
-        let user = NSUserName()
-        let shell = getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
-        return ProcessInfo.processInfo.environment.merging(
-            ["HOME": FileManager.default.homeDirectoryForCurrentUser.path, "USER": user, "LOGNAME": user, "SHELL": shell]
-        ) { inherited, _ in inherited }
+        await Command.run(invocation.executable, ["--version"], environment: Platform.claudeEnvironment(invocation), timeout: .seconds(10))?.status == 0
     }
 
     /// `-i` because `.zshrc` (where this user sets CLAUDE_CONFIG_DIR) only loads for interactive shells.
     /// The record separators fence off anything the shell's startup files print.
-    private static func loginShell(workingDirectory: URL) async -> ClaudeInvocation? {
-        let shellEnv = userEnvironment.merging(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]) { inherited, _ in inherited }
+    static func loginShell(environment: [String: String], workingDirectory: URL) async -> ClaudeInvocation? {
+        let shellEnv = environment.merging(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]) { inherited, _ in inherited }
         let shell = shellEnv["SHELL"]!
         let script = #"printf "\x1e%s\x1e%s\x1e%s\x1e" "$(command -v claude)" "$CLAUDE_CONFIG_DIR" "$PATH""#
         guard let result = await Command.run(URL(filePath: shell), ["-l", "-i", "-c", script], environment: shellEnv, timeout: .seconds(5)) else { return nil }

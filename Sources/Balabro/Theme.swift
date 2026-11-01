@@ -1,4 +1,6 @@
 import AppKit
+import BalabroEngine
+import CoreText
 import SwiftUI
 
 /// Balatro's palette, from `globals.lua:354-372` (the hex values only; no game assets).
@@ -34,5 +36,15 @@ enum Theme {
 extension Color {
     init(hex: UInt32) {
         self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+}
+
+extension GameInstall {
+    /// Registers `resources/fonts/m6x11plus.ttf` for this process only. Returns false when the game
+    /// isn't installed; `Theme.pixelFont` then falls back to SF Mono.
+    @MainActor func registerFont() async -> Bool {
+        guard let url = try? await extract("resources/fonts/m6x11plus.ttf") else { return false }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        return Theme.hasPixelFont
     }
 }

@@ -1,0 +1,30 @@
+{
+  "type": "pilot",
+  "view": {
+    "bestTimes": [],
+    "goal": "naneinf",
+    "result": {
+      "ante": 12,
+      "bestHand": "inf",
+      "bestHandText": "naneinf",
+      "deck": "b_plasma",
+      "ending": {
+        "kind": "failed",
+        "reason": "Claude isn't logged in."
+      },
+      "finishedAt": "2026-09-21T15:15:25Z",
+      "gameVersion": "1.0.1o",
+      "goal": "naneinf",
+      "lines": [
+        "Reached ante 12, round 36",
+        "Best hand naneinf"
+      ],
+      "round": 36,
+      "seconds": 3725,
+      "stake": 1,
+      "time": "62:05"
+    },
+    "status": "finished",
+    "title": "Couldn't finish"
+  }
+}

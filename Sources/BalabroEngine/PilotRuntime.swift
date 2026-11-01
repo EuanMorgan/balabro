@@ -6,8 +6,8 @@ import Observation
 /// watching the player's real game while the bot plays its own.
 @MainActor
 @Observable
-final class PilotRuntime {
-    private(set) var view: PilotView
+public final class PilotRuntime {
+    public private(set) var view: PilotView
     @ObservationIgnored private var state: PilotState
     @ObservationIgnored private let pilot: Pilot
     @ObservationIgnored private let results: PilotResults
@@ -15,9 +15,10 @@ final class PilotRuntime {
     @ObservationIgnored private let game: GameInstall?
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
     @ObservationIgnored private var process: BotProcess?
+    @ObservationIgnored private var shutDown = false
 
     /// `--resume` only finds sessions filed under the cwd, and the bot's conversations stay out of the coach's folder.
-    static let conversations = URL.applicationSupportDirectory.appending(path: "Balabro/pilot-conversations")
+    static let conversations = Platform.dataFolder.appending(path: "pilot-conversations")
 
     init(pilot: Pilot, results: PilotResults, claude: ClaudeInvocation?, game: GameInstall?) {
         var claude = claude
@@ -28,11 +29,23 @@ final class PilotRuntime {
         (self.pilot, self.results, self.claude, self.game, self.state, self.view) = (pilot, results, claude, game, state, state.view)
     }
 
-    func start(goal: CoachGoal) { send(.start(.standard(for: goal))) }
-    func stop() { send(.stop) }
-    func dismiss() { send(.dismiss) }
+    public func start(goal: CoachGoal) { send(.start(.standard(for: goal))) }
+    public func stop() { send(.stop) }
+    public func dismiss() { send(.dismiss) }
+
+    /// Closes the bot's game without recording a result, because Balabro is quitting rather than the player stopping,
+    /// and ends the claude turns, waiting for their processes to exit.
+    func shutdown() async {
+        shutDown = true
+        process?.kill()
+        let running = Array(turns.values)
+        turns = [:]
+        running.forEach { $0.cancel() }
+        for turn in running { await turn.value }
+    }
 
     private func send(_ event: PilotEvent) {
+        guard !shutDown else { return }
         let effects = pilot.reduce(&state, event)
         view = state.view
         effects.forEach(perform)
@@ -61,7 +74,9 @@ final class PilotRuntime {
                 return
             }
             turns[request.id] = Task {
-                for await output in ClaudeProcess.run(request, with: claude) { send(.turnOutput(request.id, output)) }
+                let turn = ClaudeProcess.run(request, with: claude)
+                for await output in turn.output { send(.turnOutput(request.id, output)) }
+                await turn.ended.value
                 turns[request.id] = nil
             }
         case .cancelTurn(let id):
@@ -78,7 +93,7 @@ final class PilotRuntime {
 
     private func launch(_ setup: PilotSetup) async {
         guard let game else { return fail("Balatro isn't installed.") }
-        guard let lua = Bundle.main.url(forResource: "bot", withExtension: nil) else { return fail("Only a packaged Balabro.app can play for you.") }
+        guard let lua = Platform.botLua else { return fail("Only a packaged Balabro can play for you.") }
         do {
             let install = try await BotInstall.prepare(from: game, lua: lua)
             let (process, output) = try BotProcess.launch(install, settings: [

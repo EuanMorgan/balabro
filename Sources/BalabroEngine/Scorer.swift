@@ -1,6 +1,5 @@
 import BalabroCore
 import Foundation
-import os
 
 /// The bot's private copy of the game, minimised and hidden, kept open so the coach can ask what a save's hands really score.
 /// It reads a copy of the player's save and never writes to their folder.
@@ -16,7 +15,7 @@ actor Scorer {
 
     private let game: GameInstall
     private let lua: URL
-    private let request = URL.applicationSupportDirectory.appending(path: "Balabro/scorer/request.jkr")
+    private let request = Platform.dataFolder.appending(path: "scorer/request.jkr")
     private var process: BotProcess?
     private var starting: Task<Void, Never>?
     private var pending: (id: ScoreID, answer: CheckedContinuation<Answer, Never>)?
@@ -58,12 +57,17 @@ actor Scorer {
         return await withCheckedContinuation { answer in
             finish(pending?.id, Answer())
             pending = (id, answer)
-            process.tell("score|\(id.value)|\(request.path)|\(unlocks.path)")
+            process.tell("score|\(id.value)|\(Platform.path(request))|\(Platform.path(unlocks))")
             Task {
                 try? await Task.sleep(until: deadline)
                 finish(id, Answer())
             }
         }
+    }
+
+    func shutdown() {
+        stopping = true
+        process?.kill()
     }
 
     private func finish(_ id: ScoreID?, _ answer: Answer) {
@@ -82,7 +86,7 @@ actor Scorer {
             Task { await stopWhenIdle() }
         } catch {
             failures += 1
-            Logger.balabro.error("Couldn't start the scorer: \(error)")
+            Platform.log("Couldn't start the scorer: \(error)")
         }
     }
 
@@ -98,7 +102,7 @@ actor Scorer {
                 process = nil
                 if !stopping {
                     failures += 1
-                    Logger.balabro.error("The scorer stopped with status \(status)")
+                    Platform.log("The scorer stopped with status \(status)")
                 }
                 finish(pending?.id, Answer())
             }

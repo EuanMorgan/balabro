@@ -1,4 +1,5 @@
 import AppKit
+import BalabroEngine
 import SwiftUI
 
 /// The always-on-top coaching panel.

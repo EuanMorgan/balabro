@@ -5,3 +5,5 @@ build/
 dist/
 *.xcodeproj/xcuserdata/
 DerivedData/
+# swift test on Windows also writes the engine test bundle's Info.plist into the package root.
+/Info.plist

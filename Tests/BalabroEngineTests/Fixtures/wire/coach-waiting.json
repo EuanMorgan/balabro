@@ -1,0 +1,17 @@
+{
+  "type": "coach",
+  "view": {
+    "canRetry": false,
+    "goal": "win",
+    "headline": "Start or continue a run",
+    "placeholder": {
+      "detail": "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.",
+      "title": "Waiting for a run"
+    },
+    "sawScreen": false,
+    "score": [],
+    "status": "waitingForRun",
+    "thread": [],
+    "waitingCaptions": []
+  }
+}

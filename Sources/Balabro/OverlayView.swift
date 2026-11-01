@@ -1,4 +1,5 @@
 import BalabroCore
+import BalabroEngine
 import SwiftUI
 
 /// Layout, top to bottom, sized so the "Do this now" block is readable at a glance from the game:
@@ -101,7 +102,7 @@ struct OverlayContent: View {
 
     @ViewBuilder private var pinnedSteps: some View {
         if let advice = view.advice, !advice.doNow.isEmpty {
-            DoThisNow(steps: advice.doNow, score: advice.score, chipsNeeded: view.chipsNeeded, sawScreen: view.sawScreen)
+            DoThisNow(steps: advice.doNow, score: view.score, sawScreen: view.sawScreen)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
@@ -181,27 +182,13 @@ struct OverlayContent: View {
                     FollowUpThread(thread: view.thread, waiting: view.status != .ready)
                 }
             }
-        } else {
-            if let kind = view.waitingOn {
-                WaitingView(kind: kind, capturing: view.status == .lookingAtPack)
-            } else {
-                placeholder
-            }
-        }
-    }
-
-    @ViewBuilder private var placeholder: some View {
-        switch view.status {
-        case .waitingForRun:
+        } else if let kind = view.waitingOn {
+            WaitingView(kind: kind, captions: view.waitingCaptions)
+        } else if let placeholder = view.placeholder {
             VStack(alignment: .leading, spacing: 12) {
-                Placeholder(title: "Waiting for a run",
-                            detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
-                ChipButton("What should I play next?", action: adviseNextRun)
+                Placeholder(title: placeholder.title, detail: placeholder.detail)
+                if view.status == .waitingForRun { ChipButton("What should I play next?", action: adviseNextRun) }
             }
-        case .lookingAtPack, .thinking, .answering:
-            Placeholder(title: "Reading the board")
-        case .ready:
-            Placeholder(title: "Ready", detail: "Ask anything about this run below.")
         }
     }
 }
@@ -250,7 +237,7 @@ struct AdviceView: View {
             if advice.why.isEmpty, let goal = advice.goal { Goal(text: goal) }
             if let lesson = advice.lesson {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(lesson.number.map { "Lesson \($0)" } ?? "Lesson")
+                    Text(lesson.heading)
                         .font(Theme.pixelFont(2))
                         .foregroundStyle(Theme.mult)
                     ColouredText(lesson.title, size: 13, weight: .semibold)
@@ -305,8 +292,7 @@ private struct NoticeRow<Action: View>: View {
 
 private struct DoThisNow: View {
     let steps: [String]
-    let score: [Advice.ScoreLine]
-    let chipsNeeded: Double?
+    let score: [CoachView.ScoredLine]
     let sawScreen: Bool
 
     var body: some View {
@@ -325,8 +311,8 @@ private struct DoThisNow: View {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 StepRow(number: index + 1, text: step)
             }
-            ForEach(Array(score.enumerated()), id: \.offset) { _, line in
-                ScoreRow(line: line, chipsNeeded: chipsNeeded)
+            ForEach(Array(score.enumerated()), id: \.offset) { _, scored in
+                ScoreRow(scored: scored)
             }
         }
         .textSelection(.enabled)
@@ -390,10 +376,10 @@ struct QuestionField: View {
 }
 
 private struct ScoreRow: View {
-    let line: Advice.ScoreLine
-    let chipsNeeded: Double?
+    let scored: CoachView.ScoredLine
 
-    private var outcome: Advice.ScoreLine.Outcome? { chipsNeeded.flatMap(line.outcome) }
+    private var line: Advice.ScoreLine { scored.line }
+    private var outcome: Advice.ScoreLine.Outcome? { scored.outcome }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
@@ -409,22 +395,13 @@ private struct ScoreRow: View {
                     numbers
                 }
             }
-            if !line.isAlternative, let note {
+            if let note = scored.note {
                 Text(note)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.muted)
             }
         }
         .opacity(line.isAlternative ? 0.6 : 1)
-    }
-
-    private var note: String? {
-        switch outcome {
-        case .clearsOnAverage: "Clears on average"
-        case .leaves(let chips): "Leaves \(chips) to score"
-        case .leavesAbout(let chips): "Leaves about \(chips) to score"
-        case .clears, nil: nil
-        }
     }
 
     private var label: some View {
@@ -560,7 +537,7 @@ private struct ProblemBanner: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(message)
+            Text(problem.message)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
@@ -569,22 +546,6 @@ private struct ProblemBanner: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.mult.opacity(0.85)))
-    }
-
-    private var message: String {
-        switch problem {
-        case .noRun: "Start a run in Balatro first, then ask again."
-        case .screenRecordingDenied:
-            "Couldn't take a screenshot of Balatro. Check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
-        case .saveUnreadable: "Couldn't read Balatro's save file. Advice resumes at the next save."
-        case .turnFailed(.notLoggedIn): "Claude isn't logged in. Run `claude` in Terminal and log in, then retry."
-        case .turnFailed(.cliNotFound): "Couldn't find the claude command. Install Claude Code, then restart Balabro."
-        case .turnFailed(.rateLimited(let resetsAt)):
-            resetsAt.map { "Claude usage limit reached. Resets \($0.formatted(date: .omitted, time: .shortened))." }
-                ?? "Claude usage limit reached."
-        case .turnFailed(.exited(let status, let tail)): "Claude stopped with status \(status). \(tail.suffix(160))"
-        case .turnFailed(.malformedOutput): "Claude's reply couldn't be read."
-        }
     }
 }
 

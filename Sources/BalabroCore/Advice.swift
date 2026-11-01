@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Parsing is lenient on purpose: a partial stream or an answer that ignores the format still renders,
 /// with whatever didn't match landing in `rest` as markdown.
-public struct Advice: Sendable, Equatable {
+public struct Advice: Sendable, Equatable, Encodable {
     public var doNow: [String]
     public var score: [ScoreLine]
     /// One line on what this is building towards, shown while `why` is folded away.
@@ -12,6 +12,9 @@ public struct Advice: Sendable, Equatable {
     public var why: [String]
     public var lesson: Lesson?
     public var rest: String
+
+    /// `score` goes out as `CoachView.score`, which knows what each hand leaves to score.
+    private enum CodingKeys: String, CodingKey { case doNow, goal, why, lesson, rest }
 
     public init(doNow: [String], score: [ScoreLine] = [], goal: String? = nil, why: [String], lesson: Lesson?, rest: String) {
         (self.doNow, self.score, self.goal, self.why, self.lesson, self.rest) = (doNow, score, goal, why, lesson, rest)
@@ -24,7 +27,7 @@ public struct Advice: Sendable, Equatable {
         /// The hand the player might have chosen, shown for comparison.
         public var isAlternative: Bool
 
-        public struct Sum: Sendable, Equatable {
+        public struct Sum: Sendable, Equatable, Encodable {
             public var chips: String
             public var mult: String
             public var total: String
@@ -70,6 +73,8 @@ public struct Advice: Sendable, Equatable {
         public var title: String
         public var body: String
         public init(number: Int?, title: String, body: String) { (self.number, self.title, self.body) = (number, title, body) }
+
+        public var heading: String { number.map { "Lesson \($0)" } ?? "Lesson" }
     }
 
     /// Splits on the `**Do this now:**`, `**Score:**`, `**Goal:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
