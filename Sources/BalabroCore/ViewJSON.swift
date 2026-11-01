@@ -165,3 +165,14 @@ extension BestTime: Encodable {
         try container.encode(line, forKey: .line)
     }
 }
+
+extension AppRelease: Encodable {
+    private enum CodingKeys: String, CodingKey { case version, assetURL, pageURL }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version.description, forKey: .version)
+        try container.encode(download, forKey: .assetURL)
+        try container.encode(page, forKey: .pageURL)
+    }
+}

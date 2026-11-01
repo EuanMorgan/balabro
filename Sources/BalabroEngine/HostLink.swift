@@ -13,19 +13,21 @@ public enum HostMessage: Sendable {
     /// A newer release with the Windows zip, which the app offers and installs itself.
     case update(AppRelease)
 
-    /// JSON with no newline inside, then a newline.
-    public func line() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        // A best hand of naneinf is infinite, and JSON has no infinity.
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
-        return try encoder.encode(self) + Data("\n".utf8)
-    }
+    public func line() throws -> Data { try jsonLine(self) }
+}
+
+/// JSON with no newline inside, then a newline.
+func jsonLine(_ value: some Encodable) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .iso8601
+    // A best hand of naneinf is infinite, and JSON has no infinity.
+    encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+    return try encoder.encode(value) + Data("\n".utf8)
 }
 
 extension HostMessage: Encodable {
-    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data, assetURL, pageURL }
+    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -48,9 +50,7 @@ extension HostMessage: Encodable {
             try container.encode(page, forKey: .data)
         case .update(let release):
             try container.encode("update", forKey: .type)
-            try container.encode(release.version.description, forKey: .version)
-            try container.encode(release.download, forKey: .assetURL)
-            try container.encode(release.page, forKey: .pageURL)
+            try release.encode(to: encoder)
         }
     }
 }

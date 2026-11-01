@@ -14,6 +14,7 @@ public enum EngineCommand {
         if let root = value(after: "--print-next-run", in: arguments) { return await printNextRun(URL(filePath: root)) }
         if let goal = value(after: "--play-for-me", in: arguments).flatMap(CoachGoal.init) { return await playForMe(goal) }
         if arguments.contains("--locate-claude") { return await locateClaude() }
+        if arguments.contains("--print-preview-views") { return printPreviewViews() }
         return nil
     }
 
@@ -103,6 +104,15 @@ public enum EngineCommand {
         }
         guard let result = pilot.view.result else { return 1 }
         say("RESULT \(result.ending) ante \(result.ante) round \(result.round) best \(result.bestHandText) in \(Int(result.seconds)) s")
+        return 0
+    }
+
+    /// One JSON line per state in `PreviewState.all`, so the Windows app can draw the states the Mac's `--render-previews` draws.
+    private static func printPreviewViews() -> Int32 {
+        for state in PreviewState.all(now: .now) {
+            guard let line = try? jsonLine(state) else { return 1 }
+            try? FileHandle.standardOutput.write(contentsOf: line)
+        }
         return 0
     }
 
