@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  mac:
+    # Xcode 26 ships Swift 6.2 or newer.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift build
+      - run: swift test
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: compnerd/gha-setup-swift@v0.5.1
+        with:
+          swift-version: swift-6.4.2-release
+          swift-build: 6.4.2-RELEASE
+      - run: swift build
+      - run: swift test
