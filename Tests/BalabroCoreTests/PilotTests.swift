@@ -120,6 +120,21 @@ struct PilotReducerTests {
         #expect(next.forkFrom == SessionID(rawValue: "s1"))
     }
 
+    /// bot/run.lua's `status(ctx, why)` sends a plan's why back as what it's doing.
+    @Test func aWhyTheBotSaysItIsDoingIsShownOnce() throws {
+        var state = running()
+        let request = try asking(&state)
+        _ = pilot.reduce(&state, .turnOutput(request.id, .done("Why: Sell A|B for cash.\nnext play", SessionID(rawValue: "s1"))))
+        #expect(state.view.why == "Sell A|B for cash.")
+
+        _ = pilot.reduce(&state, .bot(.status(BotStatus(ante: 1, round: 1, dollars: 4, bestHand: 0, doing: "Sell A/B for cash.")), at: start))
+        #expect(state.view.run?.doing == "Sell A/B for cash.")
+        #expect(state.view.why == nil)
+
+        _ = pilot.reduce(&state, .bot(.status(BotStatus(ante: 1, round: 2, dollars: 4, bestHand: 0, doing: "Discarding 2 cards, 40% to reach 300")), at: start))
+        #expect(state.view.why == "Sell A|B for cash.")
+    }
+
     @Test func aBadReplyIsRetriedFromTheSameHeadThenMovesOn() throws {
         var state = running()
         let first = try asking(&state)

@@ -1,0 +1,71 @@
+{
+  "height": 420,
+  "name": "overlay-update",
+  "showsWhy": false,
+  "type": "coach",
+  "update": {
+    "assetURL": "https://github.com/EuanMorgan/balabro/releases/download/v0.2.0/Balabro-0.2.0.zip",
+    "pageURL": "https://github.com/EuanMorgan/balabro/releases/tag/v0.2.0",
+    "version": "0.2.0",
+    "words": {
+      "available": "Version 0.2.0 is available",
+      "download": "Download",
+      "failed": "Couldn't update",
+      "installing": "Updating to 0.2.0…",
+      "update": "Update"
+    }
+  },
+  "view": {
+    "advice": {
+      "doNow": [
+        "Discard 7♠ 6♥ 5♠ 2♦.",
+        "Keep K♥ K♣ 3♠ 3♦. Any King or 3 makes a Full House.",
+        "Play the Full House if it lands, otherwise play K-K-3-3."
+      ],
+      "goal": "Going for a Full House",
+      "lesson": {
+        "body": "Early in a blind, keep the pairs and throw the rest. You have hands to spare.",
+        "heading": "Lesson 3",
+        "number": 3,
+        "title": "Two Pair is a draw, not a finish"
+      },
+      "rest": "",
+      "why": [
+        "Big Blind needs 450. Two Pair K-K-3-3 scores (20 + 26) × 2 = **92**.",
+        "A Full House K-K-K-3-3 scores (40 + 39) × 4 = **316**, more than three times as much.",
+        "4 outs (2 Kings, 2 threes) in 44 cards. Drawing 4 hits about 1 time in 3."
+      ]
+    },
+    "canRetry": false,
+    "goal": "win",
+    "headline": "Ante 1 · Big Blind",
+    "sawScreen": false,
+    "score": [
+      {
+        "clears": false,
+        "isAlternative": false,
+        "label": "Full House, if you draw it",
+        "sum": {
+          "chips": "79",
+          "isEstimate": false,
+          "mult": "4",
+          "total": "316"
+        }
+      },
+      {
+        "clears": false,
+        "isAlternative": true,
+        "label": "Instead: Two Pair",
+        "sum": {
+          "chips": "46",
+          "isEstimate": false,
+          "mult": "2",
+          "total": "92"
+        }
+      }
+    ],
+    "status": "ready",
+    "thread": [],
+    "waitingCaptions": []
+  }
+}

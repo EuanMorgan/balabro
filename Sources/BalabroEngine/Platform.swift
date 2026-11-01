@@ -9,7 +9,33 @@ import os
 /// Everything the engine does differently on Windows and the Mac. Nowhere else in the engine has `#if os`.
 public enum Platform {
     /// Runs, conversations and caches: `~/Library/Application Support/Balabro` on the Mac, `%LOCALAPPDATA%\Balabro` on Windows.
-    public static let dataFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Balabro")
+    /// `BALABRO_DATA_FOLDER` replaces it, so two copies on one computer can stand in for two computers.
+    public static let dataFolder = ProcessInfo.processInfo.environment["BALABRO_DATA_FOLDER"].map { URL(filePath: $0) }
+        ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Balabro")
+
+    /// iCloud Drive on the Mac drops the contents of files it thinks are unused, keeping their names, and fetches them
+    /// again when they're read, which waits on the network or fails offline. This asks for every file in `folder` at once
+    /// and waits up to `limit`, then returns the names still not downloaded. Windows' cloud folders fetch a file when it's
+    /// opened, so there it returns none.
+    static func download(_ folder: URL, within limit: Duration = .seconds(10)) async -> Set<String> {
+        #if os(Windows)
+        return []
+        #else
+        func missing() -> [URL] {
+            let key = URLResourceKey.ubiquitousItemDownloadingStatusKey
+            let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [key])) ?? []
+            return files.filter { (try? $0.resourceValues(forKeys: [key]))?.ubiquitousItemDownloadingStatus == .notDownloaded }
+        }
+        var files = missing()
+        files.forEach { try? FileManager.default.startDownloadingUbiquitousItem(at: $0) }
+        let deadline = ContinuousClock.now + limit
+        while !files.isEmpty, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(250))
+            files = missing()
+        }
+        return Set(files.map(\.lastPathComponent))
+        #endif
+    }
 
     public static var defaultSavesRoot: URL {
         #if os(Windows)
@@ -63,6 +89,14 @@ public enum Platform {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         #endif
     }()
+
+    static var releaseAsset: ReleaseAsset {
+        #if os(Windows)
+        .windows
+        #else
+        .mac
+        #endif
+    }
 
     /// A path for another program, such as the game copy's Lua or the Windows app.
     public static func path(_ url: URL) -> String {

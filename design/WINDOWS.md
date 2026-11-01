@@ -66,8 +66,8 @@ await host.serve(engine)   // returns when the Windows app closes stdin
 
 **The Windows app is two processes joined by JSON lines on stdin and stdout.** WPF starts `balabro-engine.exe` without a console window, inside a job object that kills the engine, claude and the bot copies when the app exits, even after a crash. Closing stdin also tells the engine to exit, the rule the bot already follows.
 
-- The engine sends `coach` and `pilot` lines, each carrying the whole current `CoachView` or `PilotView` as JSON, and a `capture` line when a turn needs a screenshot.
-- The app sends one line per player action. The actions are named after the runtime methods `OverlayView` calls today (`ask`, `retry`, `refresh`, `adviseNextRun`, `setGoal`, `playForMe`, `stopPilot`, `dismissPilot`), plus `screenshot` with the PNG in base64.
+- The engine sends `coach` and `pilot` lines, each carrying the whole current `CoachView` or `PilotView` as JSON, and a `capture` line when a turn needs a screenshot. It sends an `update` line for each newer release with the Windows zip, from the same `UpdateCheck` the Mac uses.
+- The app sends one line per player action. The actions are named after the runtime methods `OverlayView` calls today (`ask`, `retry`, `refresh`, `adviseNextRun`, `setGoal`, `playForMe`, `stopPilot`, `dismissPilot`), plus `screenshot` with the PNG in base64, and `stats`, which the engine answers with a `stats` line carrying the `StatsPage` the Mac's stats window draws.
 - The views are encoded with `Codable`, so a field added to a view reaches the wire with no extra edit. The text the panel shows for a problem or a score line moves out of `OverlayView` into the core, next to the types it describes. The Mac panel and the wire then use the same words.
 
 **Why WPF.** The owner's PC can build and run it, and agents there can take screenshots of it. WPF's topmost, no-activate windows, `RegisterHotKey`, the tray icon and `PrintWindow` are well documented. Avalonia would run on the Mac too, but with a real Windows machine available that matters less than WPF's simpler Win32 handling. An HTML panel in WebView2 would add a third language for no gain.
@@ -80,7 +80,7 @@ await host.serve(engine)   // returns when the Windows app closes stdin
 - **Tray icon.** Show overlay, Move overlay to the corner, Open logs folder, Quit.
 - **Font.** The game's pixel font, from the engine's extracted copy.
 
-**Left out of the Windows v1.** Self-update (replacing a running exe needs a helper, so the README says to download the new zip). The stats window. The drawn waiting animations. Code signing. Exclusive fullscreen.
+**Left out of the Windows v1.** Self-update. The stats window. The drawn waiting animations. Code signing. Exclusive fullscreen. The first three came later. The update runs inside the app with no helper: Windows lets a running exe be renamed, so the app renames what it replaces to `<name>.old`, copies the new files in, starts the new version and exits. Bitdefender blocked a helper script that restarted the app.
 
 ## Order of work
 
@@ -114,7 +114,7 @@ Rejected:
 - We accept about 400 lines of byte-level code (`Inflate`, `SHA256`, `ZipArchive`) in exchange for no dependency and one way to read the game on both platforms.
 - We accept polling every 250 ms on the Mac in exchange for one watcher with no platform code.
 - We accept a two-process Windows app in exchange for Swift keeping its own main thread, and the engine being testable from a terminal.
-- We accept a Windows v1 without self-update, stats or animations in exchange for getting coaching onto the PC sooner.
+- We accept a Windows v1 without self-update, stats or animations in exchange for getting coaching onto the PC sooner. All three came later.
 
 ## Open questions and risks
 

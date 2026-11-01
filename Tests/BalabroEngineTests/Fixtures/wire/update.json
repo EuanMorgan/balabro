@@ -1,0 +1,13 @@
+{
+  "assetURL": "https://github.com/EuanMorgan/balabro/releases/download/v0.3.0/Balabro-0.3.0-windows-x64.zip",
+  "pageURL": "https://github.com/EuanMorgan/balabro/releases/tag/v0.3.0",
+  "type": "update",
+  "version": "0.3.0",
+  "words": {
+    "available": "Version 0.3.0 is available",
+    "download": "Download",
+    "failed": "Couldn't update",
+    "installing": "Updating to 0.3.0…",
+    "update": "Update"
+  }
+}

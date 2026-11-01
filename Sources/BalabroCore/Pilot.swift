@@ -229,6 +229,9 @@ public struct Flight: Sendable {
     var failuresInARow = 0
     var predictionsChecked = 0
     var predictionsMissed = 0
+
+    /// The bot reports each plan's why as what it's doing, and saying it again underneath would show it twice.
+    var shownWhy: String? { why.map(Plan.textForBot) == status?.doing ? nil : why }
 }
 
 public struct PilotState: Sendable {
@@ -259,7 +262,7 @@ public struct PilotState: Sendable {
             let status: PilotView.Status = flight.startedAt == nil ? .preparing : flight.question != nil ? .askingClaude : .playing
             let warning = flight.predictionsMissed > 0
                 ? "The score prediction missed \(flight.predictionsMissed) of \(flight.predictionsChecked) hands, so Balatro may have changed." : nil
-            return PilotView(status: status, startedAt: flight.startedAt, goal: flight.setup.goal, run: flight.status, why: flight.why, bestTimes: best, warning: warning)
+            return PilotView(status: status, startedAt: flight.startedAt, goal: flight.setup.goal, run: flight.status, why: flight.shownWhy, bestTimes: best, warning: warning)
         }
     }
 }

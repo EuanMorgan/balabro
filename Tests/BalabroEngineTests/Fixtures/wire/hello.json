@@ -1,5 +1,7 @@
 {
   "fontPath": "C:\\Users\\player\\AppData\\Local\\Balabro\\game\\1730000000\\resources\\fonts\\m6x11plus.ttf",
+  "statsMenuTitle": "Your stats",
+  "syncFolder": "C:\\Users\\player\\iCloudDrive",
   "type": "hello",
   "version": "1.2.3"
 }

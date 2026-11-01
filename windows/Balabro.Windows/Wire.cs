@@ -11,7 +11,8 @@ namespace Balabro.Windows;
 
 public abstract record HostMessage;
 
-public sealed record Hello(string Version, string? FontPath) : HostMessage;
+/// `SyncFolder` is null when this computer doesn't sync.
+public sealed record Hello(string Version, string? FontPath, string? SyncFolder, string StatsMenuTitle) : HostMessage;
 
 public sealed record CoachMessage(CoachView View) : HostMessage;
 
@@ -19,6 +20,24 @@ public sealed record PilotMessage(PilotView View) : HostMessage;
 
 /// Answered with a `screenshot` line carrying the same id.
 public sealed record CaptureRequest(int Id) : HostMessage;
+
+/// The answer to a `stats` line.
+public sealed record StatsMessage(StatsPage Page) : HostMessage;
+
+/// A newer release with the Windows zip. The app offers it and installs it itself.
+public sealed record UpdateOffer(string Version, string AssetUrl, string PageUrl, UpdateWords Words) : HostMessage;
+
+public sealed record UpdateWords
+{
+    public required string Available { get; init; }
+    public required string Update { get; init; }
+    public required string Installing { get; init; }
+    public required string Failed { get; init; }
+    public required string Download { get; init; }
+}
+
+/// The answer to a `setSyncFolder` line. The app then restarts the engine, which reads the runs from `Path`.
+public sealed record SyncFolderSet(string? Path, string? Error) : HostMessage;
 
 public enum CoachStatus { WaitingForRun, LookingAtPack, Thinking, Answering, Ready }
 
@@ -156,6 +175,80 @@ public sealed record BestTime
     public required string Line { get; init; }
 }
 
+/// Everything the stats window shows. A section the player has no data for is null.
+public sealed record StatsPage
+{
+    public required string Title { get; init; }
+    public StatsTotals? Totals { get; init; }
+    public AnteChart? AnteChart { get; init; }
+    public BarList? Hands { get; init; }
+    public BarList? Jokers { get; init; }
+    public required RunList Runs { get; init; }
+}
+
+public sealed record StatsTotals
+{
+    public required string Title { get; init; }
+    public required List<StatsTile> Tiles { get; init; }
+}
+
+public sealed record StatsTile
+{
+    public required string Label { get; init; }
+    public required string Value { get; init; }
+    public required bool IsMoney { get; init; }
+}
+
+public sealed record AnteChart
+{
+    public required string Title { get; init; }
+    public required string Caption { get; init; }
+    /// Oldest first.
+    public required List<AnteColumn> Columns { get; init; }
+}
+
+public sealed record AnteColumn
+{
+    public required string Ante { get; init; }
+    /// The column's height as a share of the tallest the chart can draw, from 0 to 1.
+    public required double Share { get; init; }
+    public required string Help { get; init; }
+}
+
+public sealed record BarList
+{
+    public required string Title { get; init; }
+    public required List<Bar> Bars { get; init; }
+}
+
+public sealed record Bar
+{
+    public required string Label { get; init; }
+    public required string Value { get; init; }
+    /// The bar's length as a share of the longest the chart can draw, from 0 to 1.
+    public required double Share { get; init; }
+    public required string Help { get; init; }
+}
+
+public sealed record RunList
+{
+    public required string Title { get; init; }
+    public string? Empty { get; init; }
+    public required List<RunRow> Rows { get; init; }
+}
+
+public sealed record RunRow
+{
+    public required string Id { get; init; }
+    public required string Outcome { get; init; }
+    public required string Deck { get; init; }
+    public required string Date { get; init; }
+    public required string Details { get; init; }
+}
+
+/// One line of `balabro-engine --print-preview-views`: a panel state to draw for a side-by-side check with the Mac's.
+public sealed record PreviewLine(string Name, HostMessage Panel, double Height, bool ShowsWhy, UpdateOffer? Update);
+
 public static class Wire
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -173,15 +266,38 @@ public static class Wire
         var type = root.GetProperty("type").GetString();
         return type switch
         {
-            "hello" => new Hello(
-                root.GetProperty("version").GetString() ?? "dev",
-                root.TryGetProperty("fontPath", out var font) && font.ValueKind == JsonValueKind.String ? font.GetString() : null),
+            "hello" => new Hello(root.GetProperty("version").GetString() ?? "dev", OptionalString(root, "fontPath"), OptionalString(root, "syncFolder"),
+                root.GetProperty("statsMenuTitle").GetString() ?? throw new JsonException("No statsMenuTitle")),
             "coach" => new CoachMessage(View<CoachView>(root)),
             "pilot" => new PilotMessage(View<PilotView>(root)),
             "capture" => new CaptureRequest(root.GetProperty("id").GetInt32()),
+            "update" => Offer(root),
+            "stats" => new StatsMessage(root.GetProperty("data").Deserialize<StatsPage>(Options) ?? throw new JsonException("Empty stats")),
+            "syncFolderSet" => new SyncFolderSet(OptionalString(root, "path"), OptionalString(root, "error")),
             _ => throw new JsonException($"Unknown line type {type}"),
         };
     }
+
+    public static PreviewLine DecodePreview(string line)
+    {
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        return new PreviewLine(
+            root.GetProperty("name").GetString() ?? throw new JsonException("No name"),
+            Decode(line),
+            root.GetProperty("height").GetDouble(),
+            root.GetProperty("showsWhy").GetBoolean(),
+            root.TryGetProperty("update", out var update) ? Offer(update) : null);
+    }
+
+    private static UpdateOffer Offer(JsonElement release) => new(
+        release.GetProperty("version").GetString() ?? throw new JsonException("No version"),
+        release.GetProperty("assetURL").GetString() ?? throw new JsonException("No assetURL"),
+        release.GetProperty("pageURL").GetString() ?? throw new JsonException("No pageURL"),
+        release.GetProperty("words").Deserialize<UpdateWords>(Options) ?? throw new JsonException("No words"));
+
+    private static string? OptionalString(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     private static T View<T>(JsonElement root) =>
         root.GetProperty("view").Deserialize<T>(Options) ?? throw new JsonException("Empty view");
@@ -195,6 +311,9 @@ public static class Wire
     public static string PlayForMe(CoachGoal goal) => Line(new { type = "playForMe", goal = Name(goal) });
     public static string StopPilot() => Line(new { type = "stopPilot" });
     public static string DismissPilot() => Line(new { type = "dismissPilot" });
+    public static string Stats() => Line(new { type = "stats" });
+    /// Null stops syncing.
+    public static string SetSyncFolder(string? path) => Line(new { type = "setSyncFolder", path });
     public static string Screenshot(int id, byte[]? png) => Line(new { type = "screenshot", id, png = png is null ? null : Convert.ToBase64String(png) });
 
     private static string Name(CoachGoal goal) => goal == CoachGoal.Naneinf ? "naneinf" : "win";

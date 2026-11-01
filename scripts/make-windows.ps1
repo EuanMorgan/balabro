@@ -37,7 +37,7 @@ function Dependents([string]$file) {
 # DLLs every Windows 10 and 11 PC has. Anything a shipped binary needs must be shipped or be one of these.
 $windowsDlls = @(
     'advapi32.dll', 'bcrypt.dll', 'comctl32.dll', 'comdlg32.dll', 'crypt32.dll', 'dbghelp.dll', 'dwmapi.dll', 'gdi32.dll',
-    'imm32.dll', 'iphlpapi.dll', 'kernel32.dll', 'kernelbase.dll', 'mswsock.dll', 'ncrypt.dll', 'netapi32.dll', 'ntdll.dll',
+    'imm32.dll', 'iphlpapi.dll', 'kernel32.dll', 'kernelbase.dll', 'mswsock.dll', 'ncrypt.dll', 'netapi32.dll', 'normaliz.dll', 'ntdll.dll',
     'ole32.dll', 'oleaut32.dll', 'powrprof.dll', 'psapi.dll', 'rpcrt4.dll', 'secur32.dll', 'setupapi.dll', 'shell32.dll',
     'shlwapi.dll', 'ucrtbase.dll', 'user32.dll', 'userenv.dll', 'uxtheme.dll', 'version.dll', 'winmm.dll', 'wintrust.dll', 'ws2_32.dll'
 )

@@ -1,0 +1,5 @@
+{
+  "error": "Couldn't sync through that folder. You don't have permission.",
+  "path": null,
+  "type": "syncFolderSet"
+}

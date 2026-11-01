@@ -1,0 +1,26 @@
+{
+  "height": 300,
+  "name": "pilot-playing",
+  "showsWhy": false,
+  "type": "pilot",
+  "view": {
+    "bestTimes": [],
+    "goal": "win",
+    "run": {
+      "ante": 4,
+      "bestHand": 4420,
+      "bestHandText": "4,420",
+      "doing": "Discarding 3 cards, 61% to reach 2,442",
+      "dollars": 41,
+      "lines": [
+        "Ante 4, round 11, $41",
+        "Best hand 4,420"
+      ],
+      "round": 11
+    },
+    "startedAt": "2026-09-21T14:11:04Z",
+    "status": "playing",
+    "title": "Playing for you",
+    "why": "Hologram gives scaling XMult, which beats Sly Joker's flat chips, for $6."
+  }
+}

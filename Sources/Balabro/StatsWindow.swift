@@ -5,43 +5,53 @@ import SwiftUI
 
 /// Same window level and Spaces as the overlay, so it opens over Balatro in fullscreen.
 @MainActor
-func makeStatsWindow(_ data: StatsData, text: GameText) -> NSWindow {
+func makeStatsWindow(_ page: StatsPage) -> NSWindow {
     let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 520, height: 680),
         styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-    window.title = "Balabro stats"
+    window.title = page.title
     window.titlebarAppearsTransparent = true
     window.isReleasedWhenClosed = false
     window.level = .screenSaver
     window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     window.backgroundColor = NSColor(Theme.felt)
-    window.contentView = NSHostingView(rootView: StatsView(data: data, text: text))
+    window.contentView = NSHostingView(rootView: StatsView(page: page))
     window.center()
     return window
 }
 
 struct StatsView: View {
-    let data: StatsData
-    let text: GameText
+    let page: StatsPage
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                if let career = data.career, career.rounds > 0 {
-                    totals(career)
-                }
-                if data.runs.count >= 2 {
-                    AnteChart(runs: Array(data.runs.prefix(20).reversed()), deckName: name)
-                }
-                if let career = data.career {
-                    if !career.hands.isEmpty {
-                        BarList(title: "Hands you play most", items: Array(career.hands.prefix(9)))
-                    }
-                    if !career.jokers.isEmpty {
-                        BarList(title: "Jokers you use most", items: career.jokers.prefix(8).map { .init(name: name(CenterKey(rawValue: $0.name)), count: $0.count) })
+                if let totals = page.totals {
+                    Section(totals.title) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), alignment: .leading, spacing: 14) {
+                            ForEach(totals.tiles, id: \.label) { Tile(tile: $0) }
+                        }
                     }
                 }
-                recentRuns
+                if let chart = page.anteChart {
+                    AnteChart(chart: chart)
+                }
+                if let hands = page.hands {
+                    BarList(list: hands)
+                }
+                if let jokers = page.jokers {
+                    BarList(list: jokers)
+                }
+                Section(page.runs.title) {
+                    if let empty = page.runs.empty {
+                        Text(empty)
+                            .font(Theme.body)
+                            .foregroundStyle(Theme.muted)
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(page.runs.rows) { RunRow(run: $0) }
+                    }
+                }
             }
             .padding(.horizontal, 24)
             .padding(.top, 36)
@@ -50,41 +60,6 @@ struct StatsView: View {
         }
         .scrollIndicators(.never)
         .background(Theme.felt)
-    }
-
-    private func name(_ key: CenterKey) -> String { text[key]?.name ?? key.rawValue }
-
-    private func totals(_ career: CareerStats) -> some View {
-        Section("All time") {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), alignment: .leading, spacing: 14) {
-                Tile(label: "Runs", value: career.runs.formatted())
-                Tile(label: "Wins", value: career.wins.formatted())
-                Tile(label: "Rounds", value: career.rounds.formatted())
-                Tile(label: "Best ante", value: career.furthestAnte.formatted())
-                Tile(label: "Best hand", value: score(career.bestHand))
-                Tile(label: "Most money", value: "$\(career.mostMoney.formatted())", colour: Theme.money)
-            }
-        }
-    }
-
-    private var recentRuns: some View {
-        Section("Runs Balabro has seen") {
-            if data.runs.isEmpty {
-                Text("Your runs appear here as you play them.")
-                    .font(Theme.body)
-                    .foregroundStyle(Theme.muted)
-            }
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(data.runs.prefix(20)) { run in
-                    RunRow(run: run, deck: name(run.summary.deck), jokers: run.summary.jokers.map(name), best: score(run.summary.bestHand))
-                }
-            }
-        }
-    }
-
-    private func score(_ value: Double) -> String {
-        guard value.isFinite else { return "naneinf" }
-        return value < 1e15 ? Int(value).formatted() : String(format: "%.3e", value)
     }
 }
 
@@ -103,30 +78,26 @@ private struct Section<Content: View>: View {
 }
 
 private struct Tile: View {
-    let label: String
-    let value: String
-    var colour = Theme.text
+    let tile: StatsPage.Tile
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(Theme.pixelFont(2)).foregroundStyle(colour)
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            Text(tile.value).font(Theme.pixelFont(2)).foregroundStyle(tile.isMoney ? Theme.money : Theme.text)
+            Text(tile.label).font(.system(size: 12)).foregroundStyle(Theme.muted)
         }
     }
 }
 
 /// One series, so one colour. Every bar carries its own name and value.
 private struct BarList: View {
-    let title: String
-    let items: [CareerStats.Count]
+    let list: StatsPage.BarList
 
     var body: some View {
-        Section(title) {
-            let top = max(items.map(\.count).max() ?? 1, 1)
+        Section(list.title) {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(items, id: \.name) { item in
+                ForEach(list.bars, id: \.label) { bar in
                     HStack(spacing: 8) {
-                        Text(item.name)
+                        Text(bar.label)
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
@@ -134,15 +105,15 @@ private struct BarList: View {
                         GeometryReader { space in
                             UnevenRoundedRectangle(bottomTrailingRadius: 4, topTrailingRadius: 4)
                                 .fill(Theme.chips)
-                                .frame(width: max(2, space.size.width * Double(item.count) / Double(top)))
+                                .frame(width: max(2, space.size.width * bar.share))
                         }
                         .frame(height: 12)
-                        Text(item.count.formatted())
+                        Text(bar.value)
                             .font(.system(size: 12).monospacedDigit())
                             .foregroundStyle(Theme.muted)
                             .frame(width: 34, alignment: .trailing)
                     }
-                    .help("\(item.name): \(item.count.formatted())")
+                    .help(bar.help)
                 }
             }
         }
@@ -150,29 +121,27 @@ private struct BarList: View {
 }
 
 private struct AnteChart: View {
-    let runs: [PlayedRun]
-    let deckName: (CenterKey) -> String
+    let chart: StatsPage.AnteChart
     private static let height = 64.0
 
     var body: some View {
-        Section("How far you got, oldest to newest") {
-            let top = Double(max(runs.map(\.summary.ante).max() ?? 1, 8))
+        Section(chart.title) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(runs) { run in
+                    ForEach(Array(chart.columns.enumerated()), id: \.offset) { _, column in
                         VStack(spacing: 2) {
-                            Text("\(run.summary.ante)")
+                            Text(column.ante)
                                 .font(.system(size: 11).monospacedDigit())
                                 .foregroundStyle(Theme.muted)
                             UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4)
                                 .fill(Theme.chips)
-                                .frame(height: Self.height * Double(run.summary.ante) / top)
+                                .frame(height: Self.height * column.share)
                         }
                         .frame(maxWidth: 28)
-                        .help("Ante \(run.summary.ante), \(deckName(run.summary.deck)), \(run.lastPlayed.formatted(date: .abbreviated, time: .omitted))")
+                        .help(column.help)
                     }
                 }
-                Text("Ante reached in each run")
+                Text(chart.caption)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
             }
@@ -181,37 +150,22 @@ private struct AnteChart: View {
 }
 
 private struct RunRow: View {
-    let run: PlayedRun
-    let deck: String
-    let jokers: [String]
-    let best: String
+    let run: StatsPage.Run
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(outcome)
+                Text(run.outcome)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text(deck).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(run.deck).font(.system(size: 12)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 0)
-                Text(run.lastPlayed.formatted(date: .abbreviated, time: .shortened))
+                Text(run.date)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
             }
-            ColouredText(details, size: 12)
+            ColouredText(run.details, size: 12)
                 .foregroundStyle(Theme.muted)
         }
-    }
-
-    private var outcome: String {
-        let s = run.summary
-        return s.won ? "Won, reached Ante \(s.ante)" : s.ended ? "Reached Ante \(s.ante)" : "In progress, Ante \(s.ante)"
-    }
-
-    private var details: String {
-        let s = run.summary
-        return (["Best hand \(best)", "peak $\(s.peakDollars)"]
-            + (s.mostPlayedHand.map { ["mostly \($0)"] } ?? [])
-            + (jokers.isEmpty ? [] : [jokers.joined(separator: ", ")])).joined(separator: " · ")
     }
 }
