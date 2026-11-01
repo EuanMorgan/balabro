@@ -23,6 +23,9 @@ public sealed record CaptureRequest(int Id) : HostMessage;
 /// The answer to a `stats` line.
 public sealed record StatsMessage(StatsPage Page) : HostMessage;
 
+/// A newer release with the Windows zip. The app offers it and installs it itself.
+public sealed record UpdateOffer(string Version, string AssetUrl, string PageUrl) : HostMessage;
+
 public enum CoachStatus { WaitingForRun, LookingAtPack, Thinking, Answering, Ready }
 
 public enum CoachGoal { Win, Naneinf }
@@ -253,6 +256,10 @@ public static class Wire
             "coach" => new CoachMessage(View<CoachView>(root)),
             "pilot" => new PilotMessage(View<PilotView>(root)),
             "capture" => new CaptureRequest(root.GetProperty("id").GetInt32()),
+            "update" => new UpdateOffer(
+                root.GetProperty("version").GetString() ?? throw new JsonException("No version"),
+                root.GetProperty("assetURL").GetString() ?? throw new JsonException("No assetURL"),
+                root.GetProperty("pageURL").GetString() ?? throw new JsonException("No pageURL")),
             "stats" => new StatsMessage(root.GetProperty("data").Deserialize<StatsPage>(Options) ?? throw new JsonException("Empty stats")),
             _ => throw new JsonException($"Unknown line type {type}"),
         };

@@ -174,6 +174,14 @@ struct WireTests {
         try expectLine(.stats(page), matches: "stats-before-any-run")
     }
 
+    @Test func update() throws {
+        let release = AppRelease(
+            version: AppVersion("0.3.0")!,
+            download: URL(string: "https://github.com/EuanMorgan/balabro/releases/download/v0.3.0/Balabro-0.3.0-windows-x64.zip")!,
+            page: URL(string: "https://github.com/EuanMorgan/balabro/releases/tag/v0.3.0")!)
+        try expectLine(.update(release), matches: "update")
+    }
+
     @Test func appLines() {
         #expect(AppMessage(line: #"{"type":"ask","question":"why keep the 6?"}"#) == .ask("why keep the 6?"))
         #expect(AppMessage(line: #"{"type":"setGoal","goal":"naneinf"}"#) == .setGoal(.naneinf))

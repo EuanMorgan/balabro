@@ -10,6 +10,8 @@ public enum HostMessage: Sendable {
     case capture(id: Int)
     /// The answer to `AppMessage.stats`.
     case stats(StatsPage)
+    /// A newer release with the Windows zip, which the app offers and installs itself.
+    case update(AppRelease)
 
     /// JSON with no newline inside, then a newline.
     public func line() throws -> Data {
@@ -23,7 +25,7 @@ public enum HostMessage: Sendable {
 }
 
 extension HostMessage: Encodable {
-    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data }
+    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data, assetURL, pageURL }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -44,6 +46,11 @@ extension HostMessage: Encodable {
         case .stats(let page):
             try container.encode("stats", forKey: .type)
             try container.encode(page, forKey: .data)
+        case .update(let release):
+            try container.encode("update", forKey: .type)
+            try container.encode(release.version.description, forKey: .version)
+            try container.encode(release.download, forKey: .assetURL)
+            try container.encode(release.page, forKey: .pageURL)
         }
     }
 }
@@ -113,12 +120,16 @@ public final class HostLink {
         }
     }
 
-    /// Says hello, sends each view at once and again whenever it changes, and acts on the app's lines.
-    /// Returns when the app closes stdin.
+    /// Says hello, sends each view at once and again whenever it changes, offers each newer release, and acts on the
+    /// app's lines. Returns when the app closes stdin.
     public func serve(_ engine: Engine) async {
         let font = try? await engine.game?.extract("resources/fonts/m6x11plus.ttf")
         send(.hello(version: Platform.version, fontPath: font.map(Platform.path)))
-        let watchers = [watch { .coach(engine.coach.view) }, watch { .pilot(engine.pilot.view) }]
+        let watchers = [
+            watch { .coach(engine.coach.view) },
+            watch { .pilot(engine.pilot.view) },
+            Task { await UpdateCheck.thisApp?.watch { send(.update($0)) } },
+        ]
         await listen { handle($0, engine) }
         watchers.forEach { $0.cancel() }
     }

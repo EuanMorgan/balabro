@@ -18,7 +18,7 @@ public class WireTests
     public void EveryGoldenFileIsTested()
     {
         var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "wire"), "*.json").Select(Path.GetFileNameWithoutExtension).OrderBy(n => n);
-        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "stats", "stats-before-any-run" };
+        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "stats", "stats-before-any-run", "update" };
         Assert.Equal(tested, files);
     }
 
@@ -181,6 +181,15 @@ public class WireTests
         Assert.Null(page.Hands);
         Assert.Equal("Your runs appear here as you play them.", page.Runs.Empty);
         Assert.Empty(page.Runs.Rows);
+    }
+
+    [Fact]
+    public void Update()
+    {
+        var offer = Assert.IsType<UpdateOffer>(Golden("update"));
+        Assert.Equal("0.3.0", offer.Version);
+        Assert.Equal("https://github.com/EuanMorgan/balabro/releases/download/v0.3.0/Balabro-0.3.0-windows-x64.zip", offer.AssetUrl);
+        Assert.Equal("https://github.com/EuanMorgan/balabro/releases/tag/v0.3.0", offer.PageUrl);
     }
 
     [Fact]
