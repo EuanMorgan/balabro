@@ -464,7 +464,7 @@ public enum CoachEvent: Sendable {
 }
 
 /// What the coach plays for. It lasts across runs, because reaching naneinf usually takes many.
-public enum CoachGoal: String, Sendable {
+public enum CoachGoal: String, Sendable, Codable {
     case win, naneinf
 }
 
@@ -585,10 +585,26 @@ public enum Problem: Sendable, Hashable {
     case screenRecordingDenied
     case saveUnreadable(SaveFileError)
     case turnFailed(TurnFailure)
+
+    public var message: String {
+        switch self {
+        case .noRun: "Start a run in Balatro first, then ask again."
+        case .screenRecordingDenied:
+            "Couldn't take a screenshot of Balatro. On a Mac, check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
+        case .saveUnreadable: "Couldn't read Balatro's save file. Advice resumes at the next save."
+        case .turnFailed(.notLoggedIn): "Claude isn't logged in. Run `claude` in a terminal and log in, then retry."
+        case .turnFailed(.cliNotFound): "Couldn't find the claude command. Install Claude Code, then restart Balabro."
+        case .turnFailed(.rateLimited(let resetsAt)):
+            resetsAt.map { "Claude usage limit reached. Resets \($0.formatted(date: .omitted, time: .shortened))." }
+                ?? "Claude usage limit reached."
+        case .turnFailed(.exited(let status, let tail)): "Claude stopped with status \(status). \(tail.suffix(160))"
+        case .turnFailed(.malformedOutput): "Claude's reply couldn't be read."
+        }
+    }
 }
 
 public struct CoachView: Sendable, Equatable {
-    public enum Status: Sendable, Equatable {
+    public enum Status: String, Sendable, Equatable {
         case waitingForRun
         case lookingAtPack
         case thinking
@@ -616,6 +632,48 @@ public struct CoachView: Sendable, Equatable {
         self.goal = goal
         (self.status, self.headline, self.chipsNeeded, self.waitingOn, self.advice, self.sawScreen, self.thread) = (status, headline, chipsNeeded, waitingOn, advice, sawScreen, thread)
         (self.queuedQuestion, self.problem, self.canRetry) = (queuedQuestion, problem, canRetry)
+    }
+
+    public var score: [ScoredLine] {
+        advice?.score.map { ScoredLine(line: $0, outcome: chipsNeeded.flatMap($0.outcome)) } ?? []
+    }
+
+    public struct ScoredLine: Sendable, Equatable {
+        public var line: Advice.ScoreLine
+        /// nil when the save doesn't say what's left to score, or the total isn't a number.
+        public var outcome: Advice.ScoreLine.Outcome?
+
+        public var note: String? {
+            guard !line.isAlternative else { return nil }
+            return switch outcome {
+            case .clearsOnAverage: "Clears on average"
+            case .leaves(let chips): "Leaves \(chips) to score"
+            case .leavesAbout(let chips): "Leaves about \(chips) to score"
+            case .clears, nil: nil
+            }
+        }
+    }
+
+    public var waitingCaptions: [String] {
+        guard let waitingOn else { return [] }
+        return status == .lookingAtPack ? ["Looking at your screen"] : waitingOn.waitingCaptions
+    }
+
+    public var placeholder: Placeholder? {
+        guard advice == nil, thread.isEmpty, waitingOn == nil else { return nil }
+        return switch status {
+        case .waitingForRun:
+            Placeholder(
+                title: "Waiting for a run",
+                detail: "Start or continue a run in Balatro. Advice appears here each time you draw a hand, visit the shop, open a pack or pick a blind.")
+        case .lookingAtPack, .thinking, .answering: Placeholder(title: "Reading the board", detail: nil)
+        case .ready: Placeholder(title: "Ready", detail: "Ask anything about this run below.")
+        }
+    }
+
+    public struct Placeholder: Sendable, Equatable {
+        public var title: String
+        public var detail: String?
     }
 
     public struct FollowUp: Sendable, Equatable {

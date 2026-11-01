@@ -315,6 +315,8 @@ public struct BestTime: Sendable, Equatable {
     public var seconds: Double
 
     public init(title: String, seconds: Double) { (self.title, self.seconds) = (title, seconds) }
+
+    public var line: String { "\(title): \(PilotView.clock(seconds))" }
 }
 
 /// Only a win or a naneinf counts as a time, and each is best on its own.
@@ -326,7 +328,7 @@ public func bestTimes(in results: [PilotResult]) -> [BestTime] {
 }
 
 public struct PilotView: Sendable, Equatable {
-    public enum Status: Sendable, Equatable { case idle, preparing, playing, askingClaude, finished }
+    public enum Status: String, Sendable, Equatable { case idle, preparing, playing, askingClaude, finished }
     public var status: Status
     /// The panel ticks from this, so no timer state exists.
     public var startedAt: Date?
@@ -343,10 +345,39 @@ public struct PilotView: Sendable, Equatable {
     }
 }
 
+extension PilotView {
+    public var title: String {
+        guard let result else { return goal == .naneinf ? "Chasing naneinf" : "Playing for you" }
+        return switch result.ending {
+        case .won: "Won"
+        case .naneinf: "naneinf"
+        case .lost: "Lost"
+        case .stopped: "Stopped"
+        case .failed: "Couldn't finish"
+        }
+    }
+
+    /// Stands in for `run` until the bot reports its first status.
+    public var startingLine: String? {
+        guard status != .idle, run == nil, result == nil else { return nil }
+        return status == .preparing ? "Opening the bot's own copy of the game" : "Starting the run"
+    }
+
+    public var choosingLine: String? { status == .askingClaude ? "Claude is choosing" : nil }
+
+    /// The panel ticks a running clock from `startedAt` with this.
+    public static func clock(_ seconds: Double) -> String {
+        let whole = Int(seconds)
+        return String(format: "%d:%02d", whole / 60, whole % 60)
+    }
+}
+
 extension BotStatus {
     public var bestHandText: String { Prompt.chips(bestHand) }
+    public var lines: [String] { ["Ante \(ante), round \(round), $\(dollars)", "Best hand \(bestHandText)"] }
 }
 
 extension PilotResult {
     public var bestHandText: String { Prompt.chips(bestHand) }
+    public var lines: [String] { ["Reached ante \(ante), round \(round)", "Best hand \(bestHandText)"] }
 }

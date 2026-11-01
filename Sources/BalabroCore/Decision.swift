@@ -12,6 +12,15 @@ public struct Decision: Sendable, Hashable {
         case blindSelect
         /// The save can't show the cards, so this decision needs the scorer's reload or a screenshot before it can be coached.
         case openPack(BoosterPack, from: PackSource)
+
+        public var waitingCaptions: [String] {
+            switch self {
+            case .playHand: ["Counting the chips", "Checking the odds", "Reading your hand"]
+            case .shop: ["Browsing the shelves", "Counting your money", "Weighing up the jokers"]
+            case .blindSelect: ["Shuffling the deck", "Sizing up the blind", "Studying the Boss"]
+            case .openPack: ["Peeking inside", "Reading the cards", "Picking a favourite"]
+            }
+        }
     }
     public enum PackSource: Sendable, Hashable { case shop, skipTag(TagKey) }
 

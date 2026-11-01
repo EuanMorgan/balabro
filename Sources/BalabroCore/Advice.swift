@@ -70,6 +70,8 @@ public struct Advice: Sendable, Equatable {
         public var title: String
         public var body: String
         public init(number: Int?, title: String, body: String) { (self.number, self.title, self.body) = (number, title, body) }
+
+        public var heading: String { number.map { "Lesson \($0)" } ?? "Lesson" }
     }
 
     /// Splits on the `**Do this now:**`, `**Score:**`, `**Goal:**`, `**Why:**` and `**Lesson N: ...**` headings (case-insensitive,
