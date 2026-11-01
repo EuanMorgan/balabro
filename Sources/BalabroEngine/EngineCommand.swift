@@ -107,7 +107,6 @@ public enum EngineCommand {
         return 0
     }
 
-    /// One JSON line per state in `PreviewState.all`, so the Windows app can draw the states the Mac's `--render-previews` draws.
     private static func printPreviewViews() -> Int32 {
         for state in PreviewState.all(now: .now) {
             guard let line = try? jsonLine(state) else { return 1 }

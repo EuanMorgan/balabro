@@ -5,7 +5,7 @@ import Testing
 
 @Suite
 struct UpdateCheckTests {
-    /// A data URL, because the Windows test run has no server and Foundation there can't fetch file URLs.
+    /// A data URL, so the check runs with no network.
     func feed(_ json: String) -> URL {
         URL(string: "data:application/json;base64,\(Data(json.utf8).base64EncodedString())")!
     }
