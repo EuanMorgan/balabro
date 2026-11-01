@@ -1,0 +1,19 @@
+{
+  "type": "coach",
+  "view": {
+    "canRetry": false,
+    "chipsNeeded": 300,
+    "goal": "win",
+    "headline": "Ante 1 · bl_small",
+    "sawScreen": false,
+    "score": [],
+    "status": "thinking",
+    "thread": [],
+    "waitingCaptions": [
+      "Counting the chips",
+      "Checking the odds",
+      "Reading your hand"
+    ],
+    "waitingOn": "playHand"
+  }
+}

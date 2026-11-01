@@ -671,12 +671,12 @@ public struct CoachView: Sendable, Equatable {
         }
     }
 
-    public struct Placeholder: Sendable, Equatable {
+    public struct Placeholder: Sendable, Equatable, Encodable {
         public var title: String
         public var detail: String?
     }
 
-    public struct FollowUp: Sendable, Equatable {
+    public struct FollowUp: Sendable, Equatable, Encodable {
         public var question: String
         public var reply: String
         public var changedSteps: Bool

@@ -1,0 +1,30 @@
+{
+  "type": "pilot",
+  "view": {
+    "bestTimes": [
+      {
+        "line": "Fastest win: 6:52",
+        "seconds": 412,
+        "title": "Fastest win"
+      }
+    ],
+    "choosingLine": "Claude is choosing",
+    "goal": "win",
+    "run": {
+      "ante": 4,
+      "bestHand": 4420,
+      "bestHandText": "4,420",
+      "doing": "Discarding 3 cards, 61% to reach 2,442",
+      "dollars": 41,
+      "lines": [
+        "Ante 4, round 11, $41",
+        "Best hand 4,420"
+      ],
+      "round": 11
+    },
+    "startedAt": "2026-09-21T14:13:20Z",
+    "status": "askingClaude",
+    "title": "Playing for you",
+    "why": "Hologram gives scaling XMult."
+  }
+}

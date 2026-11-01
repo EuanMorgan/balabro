@@ -1,0 +1,25 @@
+{
+  "type": "coach",
+  "view": {
+    "advice": {
+      "doNow": [],
+      "rest": "ok",
+      "why": []
+    },
+    "canRetry": false,
+    "chipsNeeded": 300,
+    "goal": "win",
+    "headline": "Ante 1 · bl_small",
+    "sawScreen": false,
+    "score": [],
+    "status": "ready",
+    "thread": [
+      {
+        "changedSteps": false,
+        "question": "Say a fruit",
+        "reply": "PLUM"
+      }
+    ],
+    "waitingCaptions": []
+  }
+}

@@ -12,7 +12,9 @@ var targets: [Target] = [
     ),
     // The portable shell both apps use: the runtimes, the claude and bot processes, the save watcher.
     .target(name: "BalabroEngine", dependencies: ["BalabroCore"]),
-    .testTarget(name: "BalabroEngineTests", dependencies: ["BalabroEngine"]),
+    .testTarget(name: "BalabroEngineTests", dependencies: ["BalabroEngine"], resources: [.copy("Fixtures")]),
+    // The headless engine the Windows app runs.
+    .executableTarget(name: "balabro-engine", dependencies: ["BalabroEngine"]),
 ]
 
 #if os(macOS)
