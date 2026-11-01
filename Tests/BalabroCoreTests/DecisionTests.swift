@@ -29,6 +29,11 @@ struct DecisionTests {
         #expect(try decision("02-hand")?.fingerprint != decision("03-hand-after-discard")?.fingerprint)
     }
 
+    @Test func fingerprintIsThePromptsSHA256Hex() throws {
+        let d = try #require(try decision("02-hand"))
+        #expect(d.fingerprint.rawValue == "ab2ef28cfcbd37c2426f1c86dd05e0887836f1470b981bb9291a97f1f61e1549")
+    }
+
     @Test func rereadingTheSameSaveIsTheSameDecision() throws {
         #expect(try decision("05-shop")?.fingerprint == decision("05-shop")?.fingerprint)
     }
