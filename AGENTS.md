@@ -19,7 +19,7 @@ The Windows app runs `balabro-engine` and talks to it in JSON lines, written in 
 ## Check both apps
 
 - Run `swift test` and `dotnet test windows/Balabro.Windows.sln`. On a Mac, the C# tests can't run, so check they compile with `dotnet build windows/Balabro.Windows.sln -p:EnableWindowsTargeting=true`, and say that they still need a Windows run.
-- The panel's states for visual checks are in `PreviewState.all` (`Sources/BalabroEngine/PreviewState.swift`). Add a state when a feature changes what the panel shows. Render them on both and compare the images side by side. On the Mac, run `swift run Balabro --render-previews <folder>`. On Windows, use the app's preview renderer once it exists, which reads `balabro-engine --print-preview-views`.
+- The panel's states for visual checks are in `PreviewState.all` (`Sources/BalabroEngine/PreviewState.swift`). Add a state when a feature changes what the panel shows. Render them on both and compare the images side by side. On the Mac, run `swift run Balabro --render-previews <folder>`. On Windows, run `Balabro.exe --render-previews <folder>` from a built zip's folder, which reads `balabro-engine --print-preview-views`.
 
 ## Build and run
 

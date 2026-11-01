@@ -64,6 +64,9 @@ internal static class Theme
 /// Text in the game's colours: red and blue suits and yellow cash, with inline markdown (bold, italic, code).
 internal static partial class ColouredText
 {
+    /// Undoes the wider gap `Colour` leaves after a suit, so copied cards read `J♦ 4♠`.
+    public static string ForClipboard(string text) => WideSuitGap().Replace(text, "$1 ");
+
     public static Inline[] Inlines(string markdown)
     {
         var result = new System.Collections.Generic.List<Inline>();
@@ -121,4 +124,7 @@ internal static partial class ColouredText
 
     [GeneratedRegex(@"[♥♦♡♢♠♣♤♧] ?|\$\d+(?:,\d+)*")]
     private static partial Regex SuitOrCash();
+
+    [GeneratedRegex("([♥♦♡♢♠♣♤♧])\u2002\u2009")]
+    private static partial Regex WideSuitGap();
 }

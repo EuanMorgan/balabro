@@ -29,6 +29,9 @@ internal static class Ui
         return block;
     }
 
+    /// The same text, for what the player may want to copy.
+    public static SelectableText Selectable(string markdown, double size, Brush brush, FontWeight? weight = null) => new(markdown, size, brush, weight);
+
     public static TextBlock Pixel(string text, int multiple, Brush brush)
     {
         var block = new TextBlock

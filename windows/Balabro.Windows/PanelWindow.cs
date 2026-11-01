@@ -33,12 +33,16 @@ namespace Balabro.Windows;
 internal sealed class PanelWindow : Window
 {
     private readonly Action<string> _send;
+    private readonly bool _preview;
     private IntPtr _hwnd;
 
     private CoachView? _coach;
     private PilotView? _pilot;
     private string? _engineProblem;
+    private UpdateState? _update;
     public Action? RestartEngine { get; set; }
+    public Action? InstallUpdate { get; set; }
+    public Action<string>? OpenPage { get; set; }
 
     private bool _showWhy;
     private (int Count, int ReplyLength) _lastThread;
@@ -54,12 +58,14 @@ internal sealed class PanelWindow : Window
     private readonly TextBox _question = new();
     private readonly TextBlock _questionPlaceholder = Ui.Text("Ask about this…", 13, Theme.Muted, wrap: false);
     private readonly TextBlock _hint = Ui.Text("Ctrl+Alt+Space", 11, Theme.Muted, FontWeights.Medium, wrap: false);
+    private readonly Border _updateRow = new() { Margin = new Thickness(16, 0, 16, 0), Visibility = Visibility.Collapsed };
     private readonly Border _pilotLayout = new() { Padding = new Thickness(16), Visibility = Visibility.Collapsed };
 
-    // Everything that moves (thinking dots, captions, clocks) ticks from one timer, and is dropped at each redraw.
+    // Everything that moves (thinking dots, animations, clocks) ticks from one timer, and is dropped at each redraw.
     private readonly List<Action<double>> _tickers = new();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1.0 / 30) };
     private readonly DateTime _epoch = DateTime.UtcNow;
+    private double? _heldTime;
 
     private IntPtr _returnFocusTo;
     private bool _typing;
@@ -68,13 +74,14 @@ internal sealed class PanelWindow : Window
 
     public bool PilotIsActive => _pilot is { Status: not PilotStatus.Idle };
 
-    public PanelWindow(Action<string> send)
+    /// With `preview` the panel is only drawn into an image: it takes no shortcut and doesn't stay on top.
+    public PanelWindow(Action<string> send, bool preview = false)
     {
-        _send = send;
+        (_send, _preview) = (send, preview);
         Title = "Balabro";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
-        Topmost = true;
+        Topmost = !preview;
         ShowInTaskbar = false;
         ShowActivated = false;
         MinWidth = 280;
@@ -98,6 +105,8 @@ internal sealed class PanelWindow : Window
         SourceInitialized += OnSourceInitialized;
         Closed += (_, _) => OnClosed();
         Deactivated += (_, _) => { if (_typing) StopTyping(returnFocus: false); };
+        AddHandler(SelectableText.TextSelectedEvent, new RoutedEventHandler(OnTextSelected));
+        PreviewKeyDown += OnSelectionKey;
         _body.SizeChanged += (_, e) => { if (Math.Abs(e.PreviousSize.Height - e.NewSize.Height) > 0.5 || Math.Abs(e.PreviousSize.Width - e.NewSize.Width) > 0.5) Render(); };
         _header.SizeChanged += (_, _) => UpdateCaption();
         _timer.Tick += (_, _) => Tick();
@@ -123,7 +132,7 @@ internal sealed class PanelWindow : Window
         face.Child = stack;
         Content = face;
 
-        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto })
+        foreach (var height in new[] { GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto, GridLength.Auto })
             _coachLayout.RowDefinitions.Add(new RowDefinition { Height = height });
         Place(_coachLayout, _header, 0);
         Place(_coachLayout, _banner, 1);
@@ -131,7 +140,8 @@ internal sealed class PanelWindow : Window
         _queued.Margin = new Thickness(16, 0, 16, 6);
         _queued.TextTrimming = TextTrimming.CharacterEllipsis;
         Place(_coachLayout, _queued, 3);
-        Place(_coachLayout, QuestionField(), 4);
+        Place(_coachLayout, _updateRow, 4);
+        Place(_coachLayout, QuestionField(), 5);
 
         _body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -200,6 +210,12 @@ internal sealed class PanelWindow : Window
         Render();
     }
 
+    public void Show(UpdateState? update)
+    {
+        _update = update;
+        Render();
+    }
+
     public void ShowEngineProblem(string? message)
     {
         _engineProblem = message;
@@ -210,6 +226,8 @@ internal sealed class PanelWindow : Window
 
     private void Render()
     {
+        // The selection is about to go, so there's nothing left to copy and the game should have the keyboard back.
+        if (_typing && Keyboard.FocusedElement is SelectableText) StopTyping(returnFocus: true);
         _tickers.Clear();
         if (PilotIsActive && _engineProblem is null)
         {
@@ -234,7 +252,9 @@ internal sealed class PanelWindow : Window
         _banner.Visibility = _banner.Child is null ? Visibility.Collapsed : Visibility.Visible;
         _queued.Text = view?.QueuedQuestion is { } queued ? $"Next: {queued}" : "";
         _queued.Visibility = view?.QueuedQuestion is null ? Visibility.Collapsed : Visibility.Visible;
-        _hint.Text = _hotKeyRegistered ? "Ctrl+Alt+Space" : "Click the box to ask";
+        _hint.Text = _hotKeyRegistered || _preview ? "Ctrl+Alt+Space" : "Click the box to ask";
+        _updateRow.Child = _update is null ? null : UpdateRow(_update);
+        _updateRow.Visibility = _update is null ? Visibility.Collapsed : Visibility.Visible;
 
         var pinned = PinnedSteps(view);
         var content = Padded(ScrolledContent(view));
@@ -348,6 +368,29 @@ internal sealed class PanelWindow : Window
         };
     }
 
+    private UIElement UpdateRow(UpdateState state)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var message = Ui.Text(state.Message, 12, Theme.Muted, FontWeights.Medium);
+        message.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(message);
+        if (state.Action is { } action)
+        {
+            var button = (FrameworkElement)Ui.ChipButton(action, () =>
+            {
+                if (state.Stage == UpdateStage.Failed) OpenPage?.Invoke(state.Offer.PageUrl);
+                else InstallUpdate?.Invoke();
+            });
+            button.Margin = new Thickness(8, 0, 0, 0);
+            button.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(button, 1);
+            grid.Children.Add(button);
+        }
+        return grid;
+    }
+
     private UIElement Padded(UIElement? inner)
     {
         if (inner is FrameworkElement element) element.Margin = new Thickness(16, 0, 16, 12);
@@ -389,7 +432,7 @@ internal sealed class PanelWindow : Window
         tile.Height = 24;
         tile.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(tile);
-        var step = Ui.Coloured(text, 15, Theme.Text, FontWeights.SemiBold);
+        var step = Ui.Selectable(text, 15, Theme.Text, FontWeights.SemiBold);
         step.Margin = new Thickness(10, 1, 0, 0);
         Grid.SetColumn(step, 1);
         grid.Children.Add(step);
@@ -398,14 +441,11 @@ internal sealed class PanelWindow : Window
 
     private static UIElement ScoreRow(ScoredLine scored, double width)
     {
-        var label = Ui.Coloured(scored.Label, 13, Theme.Muted, FontWeights.Medium);
+        var label = Ui.Selectable(scored.Label, 13, Theme.Muted, FontWeights.Medium);
         label.VerticalAlignment = VerticalAlignment.Center;
         var numbers = Numbers(scored);
         // Beside the numbers when it fits on one line, otherwise above them, so a long label never wraps letter by letter.
-        label.TextWrapping = TextWrapping.NoWrap;
-        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var labelWidth = label.DesiredSize.Width;
-        label.TextWrapping = TextWrapping.Wrap;
+        var labelWidth = label.NaturalWidth;
         double numbersWidth = 0;
         if (numbers is not null)
         {
@@ -477,7 +517,7 @@ internal sealed class PanelWindow : Window
             if (view.Thread.Count > 0) Ui.Add(column, Thread(view.Thread, view.Status != CoachStatus.Ready), 14);
             return column;
         }
-        if (view.WaitingOn is { } kind) return Waiting(kind, view.WaitingCaptions);
+        if (view.WaitingOn is { } kind) return WaitingView.Build(kind, view.WaitingCaptions, _tickers, moving: _preview || SystemParameters.ClientAreaAnimation);
         if (view.Placeholder is { } placeholder)
         {
             var column = Ui.Column(12, Placeholder(placeholder.Title, placeholder.Detail));
@@ -524,7 +564,7 @@ internal sealed class PanelWindow : Window
                     grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                     grid.Children.Add(new Ellipse { Width = 4, Height = 4, Fill = Theme.MutedFaint, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 8, 8, 0) });
-                    var text = Ui.Coloured(line, 13, Theme.TextSoft);
+                    var text = Ui.Selectable(line, 13, Theme.TextSoft);
                     Grid.SetColumn(text, 1);
                     grid.Children.Add(text);
                     Ui.Add(reasons, grid, 6);
@@ -533,14 +573,14 @@ internal sealed class PanelWindow : Window
             }
             Ui.Add(column, whyColumn, 14);
         }
-        if (advice.Why.Count == 0 && advice.Goal is { } onlyGoal) Ui.Add(column, Ui.Coloured(onlyGoal, 13, Theme.Text, FontWeights.SemiBold), 14);
+        if (advice.Why.Count == 0 && advice.Goal is { } onlyGoal) Ui.Add(column, Ui.Selectable(onlyGoal, 13, Theme.Text, FontWeights.SemiBold), 14);
         if (advice.Lesson is { } lesson)
         {
-            var lessonColumn = Ui.Column(4, Ui.Pixel(lesson.Heading, 2, Theme.Mult), Ui.Coloured(lesson.Title, 13, Theme.Text, FontWeights.SemiBold));
-            if (lesson.Body.Length > 0) Ui.Add(lessonColumn, Ui.Coloured(lesson.Body, 13, Theme.Muted), 4);
+            var lessonColumn = Ui.Column(4, Ui.Pixel(lesson.Heading, 2, Theme.Mult), Ui.Selectable(lesson.Title, 13, Theme.Text, FontWeights.SemiBold));
+            if (lesson.Body.Length > 0) Ui.Add(lessonColumn, Ui.Selectable(lesson.Body, 13, Theme.Muted), 4);
             Ui.Add(column, lessonColumn, 14);
         }
-        if (advice.Rest.Length > 0) Ui.Add(column, Ui.Coloured(advice.Rest, 13, Theme.TextSoft), 14);
+        if (advice.Rest.Length > 0) Ui.Add(column, Ui.Selectable(advice.Rest, 13, Theme.TextSoft), 14);
         if (streaming) Ui.Add(column, ThinkingDots(), 14);
         return column;
     }
@@ -557,10 +597,10 @@ internal sealed class PanelWindow : Window
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(8, 5, 8, 5),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Child = Ui.Coloured(followUp.Question, 13, Theme.Muted, FontWeights.Medium),
+                Child = Ui.Selectable(followUp.Question, 13, Theme.Muted, FontWeights.Medium),
             };
             var item = Ui.Column(6, question);
-            if (followUp.Reply.Length > 0) Ui.Add(item, Ui.Coloured(followUp.Reply, 13, Theme.TextSoft), 6);
+            if (followUp.Reply.Length > 0) Ui.Add(item, Ui.Selectable(followUp.Reply, 13, Theme.TextSoft), 6);
             if (followUp.ChangedSteps) Ui.Add(item, Ui.Text("Steps updated above", 11, Theme.Chips, FontWeights.Medium), 6);
             if (waiting && i == thread.Count - 1) Ui.Add(item, ThinkingDots(), 6);
             Ui.Add(column, item, 12);
@@ -576,108 +616,6 @@ internal sealed class PanelWindow : Window
         dots.HorizontalAlignment = HorizontalAlignment.Left;
         _tickers.Add(time => dots.Text = new string('.', 1 + (int)(time / 0.4) % 3));
         return dots;
-    }
-
-    /// A simpler cousin of the Mac's drawn animations: the game's shapes, moving gently, over the caption.
-    private UIElement Waiting(DecisionKind kind, List<string> captions)
-    {
-        var caption = Ui.Pixel(captions.FirstOrDefault() ?? "", 2, Theme.Chips);
-        caption.HorizontalAlignment = HorizontalAlignment.Center;
-        if (captions.Count > 1) _tickers.Add(time => caption.Text = captions[(int)(time / 3.5) % captions.Count]);
-        var picture = new Grid { Height = 92 };
-        var drawing = WaitingPicture(kind);
-        drawing.VerticalAlignment = VerticalAlignment.Bottom;
-        drawing.HorizontalAlignment = HorizontalAlignment.Center;
-        picture.Children.Add(drawing);
-        var column = Ui.Column(14, picture, caption);
-        column.Margin = new Thickness(0, 10, 0, 0);
-        return column;
-    }
-
-    private FrameworkElement WaitingPicture(DecisionKind kind)
-    {
-        switch (kind)
-        {
-            case DecisionKind.PlayHand:
-            {
-                TextBlock Number() { var b = Ui.Pixel("10", 3, Theme.Text); b.HorizontalAlignment = HorizontalAlignment.Center; b.VerticalAlignment = VerticalAlignment.Center; return b; }
-                var chips = Number();
-                var mult = Number();
-                var chipsTile = Ui.ChipTile(chips);
-                var multTile = Ui.ChipTile(mult, Theme.Mult, Theme.MultDeep);
-                chipsTile.Width = multTile.Width = 72;
-                chipsTile.Height = multTile.Height = 44;
-                var times = Ui.Text("×", 20, Theme.Mult, FontWeights.Heavy, wrap: false);
-                times.VerticalAlignment = VerticalAlignment.Center;
-                _tickers.Add(time =>
-                {
-                    var progress = time / 6 % 1;
-                    chips.Text = (10 + (int)(progress * 90)).ToString();
-                    mult.Text = (1 + (int)(progress * 8)).ToString();
-                });
-                return Ui.Row(8, chipsTile, times, multTile);
-            }
-            case DecisionKind.Shop:
-            {
-                var coin = new Grid { Width = 50, Height = 50, RenderTransformOrigin = new Point(0.5, 0.5) };
-                coin.Children.Add(new Ellipse { Fill = Theme.MoneyDeep });
-                coin.Children.Add(new Ellipse { Fill = Theme.Money, Margin = new Thickness(3) });
-                coin.Children.Add(new Ellipse { Stroke = Theme.MoneyDeep, StrokeThickness = 2, Margin = new Thickness(7) });
-                var dollar = Ui.Pixel("$", 3, Theme.MoneyDeep);
-                dollar.HorizontalAlignment = HorizontalAlignment.Center;
-                dollar.VerticalAlignment = VerticalAlignment.Center;
-                coin.Children.Add(dollar);
-                var spin = new ScaleTransform();
-                coin.RenderTransform = spin;
-                _tickers.Add(time => spin.ScaleX = Math.Max(0.08, Math.Abs(Math.Cos(time * Math.PI / 1.6))));
-                return coin;
-            }
-            case DecisionKind.BlindSelect:
-            {
-                var fan = new Canvas { Width = 150, Height = 70 };
-                var suits = new (string, Brush)[] { ("♠", Theme.Chips), ("♥", Theme.Mult), ("♣", Theme.Chips), ("♦", Theme.Mult), ("♠", Theme.Chips) };
-                for (var i = 0; i < suits.Length; i++)
-                {
-                    var position = i - 2.0;
-                    var face = Ui.Text(suits[i].Item1, 18, suits[i].Item2, wrap: false);
-                    face.HorizontalAlignment = HorizontalAlignment.Center;
-                    face.VerticalAlignment = VerticalAlignment.Center;
-                    var card = new Border { Width = 34, Height = 48, CornerRadius = new CornerRadius(4), Background = Theme.Text, Child = face, RenderTransformOrigin = new Point(0.5, 0.5) };
-                    var shift = new TranslateTransform();
-                    var group = new TransformGroup();
-                    group.Children.Add(new RotateTransform(position * 9));
-                    group.Children.Add(shift);
-                    card.RenderTransform = group;
-                    Canvas.SetLeft(card, 58 + position * 22);
-                    Canvas.SetTop(card, 14 + Math.Abs(position) * 3);
-                    fan.Children.Add(card);
-                    var index = i;
-                    _tickers.Add(time => shift.Y = -10 * Math.Max(0, Math.Sin(time * 3 - index * 0.8)));
-                }
-                return fan;
-            }
-            default:
-            {
-                var question = Ui.Pixel("?", 3, Theme.Text);
-                question.HorizontalAlignment = HorizontalAlignment.Center;
-                question.VerticalAlignment = VerticalAlignment.Center;
-                var pack = new Border
-                {
-                    Width = 50,
-                    Height = 70,
-                    CornerRadius = new CornerRadius(4),
-                    Background = new LinearGradientBrush(Color.FromRgb(0x00, 0x9D, 0xFF), Color.FromRgb(0xFE, 0x5F, 0x55), 45),
-                    BorderBrush = Theme.Muted,
-                    BorderThickness = new Thickness(0, 6, 0, 6),
-                    Child = question,
-                    RenderTransformOrigin = new Point(0.5, 0.5),
-                };
-                var wobble = new RotateTransform();
-                pack.RenderTransform = wobble;
-                _tickers.Add(time => wobble.Angle = Math.Sin(time * 2.5) * 5);
-                return pack;
-            }
-        }
     }
 
     /// Replaces the coach while the bot has a run, as Sources/Balabro/PilotPanel.swift. The bot plays in its own window.
@@ -743,9 +681,26 @@ internal sealed class PanelWindow : Window
         return $"{whole / 60}:{whole % 60:00}";
     }
 
+    /// Stops the clock at `time`, so an image shows a chosen moment of an animation.
+    public void HoldTime(double time)
+    {
+        _heldTime = time;
+        _timer.Stop();
+        Tick();
+    }
+
+    public bool ShowWhy
+    {
+        set
+        {
+            _showWhy = value;
+            Render();
+        }
+    }
+
     private void Tick()
     {
-        var time = (DateTime.UtcNow - _epoch).TotalSeconds;
+        var time = _heldTime ?? (DateTime.UtcNow - _epoch).TotalSeconds;
         foreach (var ticker in _tickers.ToArray()) ticker(time);
     }
 
@@ -765,8 +720,11 @@ internal sealed class PanelWindow : Window
         var round = Native.DWMWCP_ROUND;
         Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
-        _hotKeyRegistered = Native.RegisterHotKey(_hwnd, HotKeyId, Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT, Native.VK_SPACE);
-        if (!_hotKeyRegistered) Log.Write("Couldn't register Ctrl+Alt+Space; another program may have it");
+        if (!_preview)
+        {
+            _hotKeyRegistered = Native.RegisterHotKey(_hwnd, HotKeyId, Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT, Native.VK_SPACE);
+            if (!_hotKeyRegistered) Log.Write("Couldn't register Ctrl+Alt+Space; another program may have it");
+        }
         Render();
     }
 
@@ -801,7 +759,9 @@ internal sealed class PanelWindow : Window
 
     /// The shortcut, or a click in the box: show the panel, take the keyboard and focus the box,
     /// remembering which window to give it back to.
-    public void StartTyping()
+    public void StartTyping() => TakeKeyboard(_question);
+
+    private void TakeKeyboard(UIElement target)
     {
         if (!IsVisible) Show();
         var foreground = Native.GetForegroundWindow();
@@ -810,8 +770,29 @@ internal sealed class PanelWindow : Window
         _typing = true;
         Native.ForceForeground(_hwnd);
         Activate();
-        _question.Focus();
-        Keyboard.Focus(_question);
+        target.Focus();
+        Keyboard.Focus(target);
+    }
+
+    /// A finished drag means the player wants to copy, which takes the keyboard. A plain click leaves it with the game.
+    private void OnTextSelected(object sender, RoutedEventArgs e)
+    {
+        if (!_typing && !_preview && e.OriginalSource is SelectableText text) TakeKeyboard(text);
+    }
+
+    private void OnSelectionKey(object sender, KeyEventArgs e)
+    {
+        if (!_typing || Keyboard.FocusedElement is not SelectableText) return;
+        if (e.Key == Key.Escape)
+        {
+            StopTyping(returnFocus: true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            // After the text box has done the copy.
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () => StopTyping(returnFocus: true));
+        }
     }
 
     private void StopTyping(bool returnFocus)

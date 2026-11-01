@@ -80,7 +80,7 @@ await host.serve(engine)   // returns when the Windows app closes stdin
 - **Tray icon.** Show overlay, Move overlay to the corner, Open logs folder, Quit.
 - **Font.** The game's pixel font, from the engine's extracted copy.
 
-**Left out of the Windows v1.** Self-update (replacing a running exe needs a helper, so the README says to download the new zip). The stats window. The drawn waiting animations. Code signing. Exclusive fullscreen.
+**Left out of the Windows v1.** Self-update. The stats window. The drawn waiting animations. Code signing. Exclusive fullscreen. The first three came later. The update runs inside the app with no helper: Windows lets a running exe be renamed, so the app renames what it replaces to `<name>.old`, copies the new files in, starts the new version and exits. Bitdefender blocked a helper script that restarted the app.
 
 ## Order of work
 
@@ -114,7 +114,7 @@ Rejected:
 - We accept about 400 lines of byte-level code (`Inflate`, `SHA256`, `ZipArchive`) in exchange for no dependency and one way to read the game on both platforms.
 - We accept polling every 250 ms on the Mac in exchange for one watcher with no platform code.
 - We accept a two-process Windows app in exchange for Swift keeping its own main thread, and the engine being testable from a terminal.
-- We accept a Windows v1 without self-update, stats or animations in exchange for getting coaching onto the PC sooner.
+- We accept a Windows v1 without self-update, stats or animations in exchange for getting coaching onto the PC sooner. All three came later.
 
 ## Open questions and risks
 

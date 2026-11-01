@@ -62,4 +62,4 @@ The run so far is the newest exchanges that fit in 12,000 characters. A long run
 
 - Older iCloud Drive replaced an evicted file with a hidden `.<name>.icloud` placeholder. Only macOS 27 was checked, and Balabro runs on macOS 14 and later. On a Mac that still makes placeholders, an evicted run is missing at launch, and the coach starts a new record for it that conflicts in iCloud.
 - The path where a file stays not downloaded for the whole 10 s, such as offline, hasn't run for real.
-- The Windows tray, folder picker and engine restart haven't run on Windows yet. The wire lines are tested on both sides.
+- The Windows tray's items and the engine restart have run against a real engine, by `SyncTrayTests` with `BALABRO_TEST_ENGINE` set. The folder picker and the warning box themselves haven't, because that test stands in for them. The wire lines are tested on both sides.

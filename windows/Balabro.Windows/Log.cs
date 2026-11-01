@@ -5,9 +5,10 @@ namespace Balabro.Windows;
 
 internal static class Paths
 {
-    /// `%LOCALAPPDATA%\Balabro`, the engine's data folder too.
-    public static string DataFolder { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Balabro");
+    /// `%LOCALAPPDATA%\Balabro`, the engine's data folder too. `BALABRO_DATA_FOLDER` moves both.
+    public static string DataFolder { get; } = Environment.GetEnvironmentVariable("BALABRO_DATA_FOLDER") is { Length: > 0 } folder
+        ? folder
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Balabro");
 
     public static string LogsFolder => Path.Combine(DataFolder, "logs");
 

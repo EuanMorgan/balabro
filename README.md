@@ -62,7 +62,7 @@ You need Windows 10 or 11, Balatro from Steam, and Claude Code installed and log
 5. Play as usual. Advice appears a few seconds after each decision. To ask a question, press **Ctrl+Alt+Space** or click the box at the bottom of the panel, type, and press **Enter**. The game gets the keyboard back when you press Enter, or **Escape** to go back without asking. Clicking anywhere else on the panel leaves the keyboard with the game.
 6. Right-click the spade for **Show overlay**, **Move overlay to the corner**, **Sync with another computer…**, **Open logs folder** and **Quit**. Quitting closes everything Balabro started, including its own copies of the game.
 
-The infinity sign, the play button and the refresh arrow work as on the Mac. The Windows version doesn't update itself or show stats yet. To update, quit Balabro, download the new zip and unzip it over the old folder.
+The infinity sign, the play button and the refresh arrow work as on the Mac. To update, click **Update** when the panel says a new version is available. Balabro restarts and carries on with your run. To see how you play over time, click the Balabro icon in the tray and choose **Your stats**.
 
 If something is wrong, open a terminal in the Balabro folder and check each part on its own:
 
@@ -84,7 +84,7 @@ If you play on two computers, Balabro can keep your coached runs, the bot's resu
 
 Open Balabro on one computer at a time. If both are open and you play the same run, the last one to save wins.
 
-When you carry on a run on the other computer, Claude starts a new conversation there, because Claude keeps its conversations on the computer that had them. Balabro tells it the run's advice and answers so far, so it carries on from them. On the Mac, **Your stats** shows runs from both computers.
+When you carry on a run on the other computer, Claude starts a new conversation there, because Claude keeps its conversations on the computer that had them. Balabro tells it the run's advice and answers so far, so it carries on from them. **Your stats** shows runs from both computers.
 
 To stop, choose **Stop syncing**. Balabro copies the folder's runs back to this computer and keeps using them here. It deletes nothing from either place. [design/SYNC.md](design/SYNC.md) explains how syncing works.
 
