@@ -20,8 +20,6 @@ internal static class Native
     public const uint MOD_NOREPEAT = 0x4000;
     public const uint VK_SPACE = 0x20;
 
-    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
-
     public const uint PW_CLIENTONLY = 0x1;
     public const uint PW_RENDERFULLCONTENT = 0x2;
 
@@ -99,9 +97,6 @@ internal static class Native
 
     [DllImport("user32.dll")]
     public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);

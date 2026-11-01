@@ -33,7 +33,6 @@ namespace Balabro.Windows;
 internal sealed class PanelWindow : Window
 {
     private readonly Action<string> _send;
-    private readonly bool _excludeFromCapture;
     private IntPtr _hwnd;
 
     private CoachView? _coach;
@@ -69,10 +68,9 @@ internal sealed class PanelWindow : Window
 
     public bool PilotIsActive => _pilot is { Status: not PilotStatus.Idle };
 
-    public PanelWindow(Action<string> send, bool excludeFromCapture)
+    public PanelWindow(Action<string> send)
     {
         _send = send;
-        _excludeFromCapture = excludeFromCapture;
         Title = "Balabro";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
@@ -757,7 +755,7 @@ internal sealed class PanelWindow : Window
         if (WindowChrome.GetWindowChrome(this) is { } chrome) chrome.CaptionHeight = Math.Max(30, _header.ActualHeight - 6);
     }
 
-    // ---- Win32: no activation, the shortcut, capture exclusion ----
+    // ---- Win32: no activation, the shortcut ----
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
@@ -766,8 +764,6 @@ internal sealed class PanelWindow : Window
         Native.SetWindowLong(_hwnd, Native.GWL_EXSTYLE, (style | Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW) & ~Native.WS_EX_APPWINDOW);
         var round = Native.DWMWCP_ROUND;
         Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
-        if (_excludeFromCapture && !Native.SetWindowDisplayAffinity(_hwnd, Native.WDA_EXCLUDEFROMCAPTURE))
-            Log.Write("Couldn't exclude the panel from screen captures");
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
         _hotKeyRegistered = Native.RegisterHotKey(_hwnd, HotKeyId, Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT, Native.VK_SPACE);
         if (!_hotKeyRegistered) Log.Write("Couldn't register Ctrl+Alt+Space; another program may have it");

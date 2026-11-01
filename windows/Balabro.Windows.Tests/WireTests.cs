@@ -169,7 +169,7 @@ public class WireTests
     [Fact]
     public void OnlyTheSavesRootGoesToTheEngine()
     {
-        Assert.Equal(new[] { "--saves-root", @"C:\x" }, Shell.EngineArguments(new[] { "--show-in-captures", "--saves-root", @"C:\x" }));
+        Assert.Equal(new[] { "--saves-root", @"C:\x" }, Shell.EngineArguments(new[] { "--verbose", "--saves-root", @"C:\x" }));
         Assert.Empty(Shell.EngineArguments(new[] { "--saves-root" }));
     }
 }

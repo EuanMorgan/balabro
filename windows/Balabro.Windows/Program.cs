@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Windows;
@@ -48,8 +47,7 @@ internal sealed class Shell : IDisposable
     public Shell(string[] args)
     {
         _engine = new EngineLink(EngineArguments(args));
-        // A capture of the screen would otherwise show the panel over the game; --show-in-captures lets the panel be screenshotted.
-        _panel = new PanelWindow(_engine.Send, excludeFromCapture: !args.Contains("--show-in-captures"));
+        _panel = new PanelWindow(_engine.Send);
     }
 
     /// Only `--saves-root <path>` goes on to the engine.
@@ -79,8 +77,7 @@ internal sealed class Shell : IDisposable
             : "Balabro's engine stopped. The log is in the tray menu's logs folder."));
         _engine.Start();
 
-        _guard = new ForegroundGuard(() => _panel.PilotIsActive, _panel.KeepOnTop,
-            enabled: Environment.GetEnvironmentVariable("BALABRO_NO_FOCUS_GUARD") != "1");
+        _guard = new ForegroundGuard(() => _panel.PilotIsActive, _panel.KeepOnTop);
         _tray = MakeTray();
     }
 

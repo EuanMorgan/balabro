@@ -11,13 +11,12 @@ internal sealed class ForegroundGuard : IDisposable
     private readonly IntPtr _hook;
     private readonly Func<bool> _copyMayHaveFocus;
     private readonly Action _onChange;
-    private readonly bool _enabled;
     private IntPtr _last;
 
     /// `copyMayHaveFocus` is true while "play for me" runs, whose copy is meant to be seen.
-    public ForegroundGuard(Func<bool> copyMayHaveFocus, Action onChange, bool enabled)
+    public ForegroundGuard(Func<bool> copyMayHaveFocus, Action onChange)
     {
-        (_copyMayHaveFocus, _onChange, _enabled) = (copyMayHaveFocus, onChange, enabled);
+        (_copyMayHaveFocus, _onChange) = (copyMayHaveFocus, onChange);
         _callback = OnForeground;
         _hook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _callback, 0, 0,
             Native.WINEVENT_OUTOFCONTEXT | Native.WINEVENT_SKIPOWNPROCESS);
@@ -34,7 +33,7 @@ internal sealed class ForegroundGuard : IDisposable
             _last = hwnd;
             return;
         }
-        if (!_enabled || _copyMayHaveFocus() || _last == IntPtr.Zero || !Native.IsWindow(_last)) return;
+        if (_copyMayHaveFocus() || _last == IntPtr.Zero || !Native.IsWindow(_last)) return;
         var back = Native.ForceForeground(_last);
         Log.Write($"A game copy took the foreground; gave it back to \"{Native.WindowTitle(_last)}\": {(back ? "done" : "refused")}");
     }
