@@ -87,7 +87,7 @@ struct SyncTests {
 
         _ = try await machine.syncing(with: sync)
 
-        #expect(try json(file) as NSDictionary == ["machine": machine.id.rawValue, "syncFolder": sync.path])
+        #expect(try json(file) as NSDictionary == ["machine": machine.id.rawValue, "syncFolder": Platform.path(sync)])
         #expect(Machine.load(dataFolder: local).syncFolder == sync)
         #expect(Machine.load(dataFolder: local).id == machine.id)
     }
