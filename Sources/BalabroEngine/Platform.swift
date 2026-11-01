@@ -64,6 +64,14 @@ public enum Platform {
         #endif
     }()
 
+    static var releaseAsset: ReleaseAsset {
+        #if os(Windows)
+        .windows
+        #else
+        .mac
+        #endif
+    }
+
     /// A path for another program, such as the game copy's Lua or the Windows app.
     public static func path(_ url: URL) -> String {
         #if os(Windows)

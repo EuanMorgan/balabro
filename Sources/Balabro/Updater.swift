@@ -4,7 +4,7 @@ import BalabroEngine
 import Observation
 import os
 
-/// Finds newer GitHub releases and swaps the running app for one.
+/// Offers a newer release from `UpdateCheck` and swaps the running app for it.
 ///
 /// Restarting mid-run is safe: a run's conversation only moves on a completed turn, so at worst
 /// the coach repeats the answer it was writing.
@@ -19,30 +19,25 @@ final class Updater {
     }
 
     private(set) var status = Status.none
-    @ObservationIgnored private let current: AppVersion
+    @ObservationIgnored private let updates: UpdateCheck
     @ObservationIgnored private let logger = Logger(subsystem: "com.euanmorgan.balabro", category: "update")
 
     /// nil outside a packaged app, such as under `swift run`, where there's nothing to replace.
     init?() {
-        guard Bundle.main.bundleURL.pathExtension == "app",
-              let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).flatMap(AppVersion.init)
-        else { return nil }
-        current = version
+        guard Bundle.main.bundleURL.pathExtension == "app", let updates = UpdateCheck.thisApp else { return nil }
+        self.updates = updates
     }
 
     func watch() async {
-        while !Task.isCancelled {
-            await check()
-            try? await Task.sleep(for: .seconds(6 * 60 * 60))
-        }
+        await updates.watch(offer)
     }
 
-    /// Being offline or rate limited changes nothing. The next check tries again.
     func check() async {
+        if let release = await updates.newest() { offer(release) }
+    }
+
+    private func offer(_ release: AppRelease) {
         if case .installing = status { return }
-        let request = URLRequest(url: ReleaseFeed.url, cachePolicy: .reloadIgnoringLocalCacheData)
-        guard let (json, _) = try? await URLSession.shared.data(for: request),
-              let release = try? ReleaseFeed.newest(in: json, newerThan: current) else { return }
         status = .available(release)
     }
 

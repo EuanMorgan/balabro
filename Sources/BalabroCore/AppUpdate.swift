@@ -31,14 +31,26 @@ public struct AppRelease: Sendable, Equatable {
     public init(version: AppVersion, download: URL, page: URL) { (self.version, self.download, self.page) = (version, download, page) }
 }
 
+/// The zip a release must carry for each app to update to it.
+public enum ReleaseAsset: Sendable {
+    case mac, windows
+
+    func name(for version: AppVersion) -> String {
+        switch self {
+        case .mac: "Balabro-\(version).zip"
+        case .windows: "Balabro-\(version)-windows-x64.zip"
+        }
+    }
+}
+
 public enum ReleaseFeed {
     /// The whole list, because `/releases/latest` leaves out pre-releases.
     public static let url = URL(string: "https://api.github.com/repos/EuanMorgan/balabro/releases?per_page=30")!
 
-    /// The highest published version above `current` that has its zip attached.
-    public static func newest(in json: Data, newerThan current: AppVersion) throws -> AppRelease? {
+    /// The highest published version above `current` that has `asset` attached.
+    public static func newest(in json: Data, newerThan current: AppVersion, asset: ReleaseAsset) throws -> AppRelease? {
         try JSONDecoder().decode([GitHubRelease].self, from: json)
-            .compactMap(\.appRelease)
+            .compactMap { $0.appRelease(asset) }
             .filter { $0.version > current }
             .max { $0.version < $1.version }
     }
@@ -53,9 +65,9 @@ public enum ReleaseFeed {
         let html_url: URL
         let assets: [Asset]
 
-        var appRelease: AppRelease? {
+        func appRelease(_ asset: ReleaseAsset) -> AppRelease? {
             guard !draft, let version = AppVersion(tag_name),
-                  let zip = assets.first(where: { $0.name == "Balabro-\(version).zip" }) else { return nil }
+                  let zip = assets.first(where: { $0.name == asset.name(for: version) }) else { return nil }
             return AppRelease(version: version, download: zip.browser_download_url, page: html_url)
         }
     }
