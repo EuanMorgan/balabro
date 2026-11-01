@@ -59,9 +59,12 @@ public struct Plan: Sendable, Hashable {
         case .reroll: "reroll"
         case .openPack(let position): "open \(position)"
         }
-        return (["plan", String(question.value), "why:" + why.replacingOccurrences(of: "|", with: "/")] + moves + ["end:" + end])
+        return (["plan", String(question.value), "why:" + Self.textForBot(why)] + moves + ["end:" + end])
             .joined(separator: "|")
     }
+
+    /// `|` separates the fields of the bot's lines.
+    static func textForBot(_ why: String) -> String { why.replacingOccurrences(of: "|", with: "/") }
 
     /// The why so far, from a reply still being written.
     public static func partialWhy(_ partial: String) -> String? {
