@@ -29,8 +29,9 @@ function Run([string]$exe, [string[]]$arguments) {
 Push-Location $root
 try {
     Write-Host "Building balabro-engine $Version"
-    Run swift @('build', '-c', 'release', '--product', 'balabro-engine')
-    $bin = (& swift build -c release --show-bin-path).Trim()
+    # The same build system as CI's Windows job; see .github/workflows/ci.yml.
+    Run swift @('build', '-c', 'release', '--build-system', 'native', '--product', 'balabro-engine')
+    $bin = (& swift build -c release --build-system native --show-bin-path).Trim()
     $engine = Join-Path $bin 'balabro-engine.exe'
 
     Write-Host "Publishing Balabro.exe"

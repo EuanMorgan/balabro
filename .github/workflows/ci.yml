@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -21,8 +22,10 @@ jobs:
         with:
           swift-version: swift-6.4.2-release
           swift-build: 6.4.2-RELEASE
-      - run: swift build
-      - run: swift test
+      # The default build system touches each test resource bundle with `copy /b <bundle> +,,` while another task
+      # may still be writing the bundle's Info.plist, which fails about half the time. The native one has no such step.
+      - run: swift build --build-system native
+      - run: swift test --build-system native
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
