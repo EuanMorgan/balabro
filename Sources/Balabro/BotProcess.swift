@@ -1,4 +1,5 @@
 import BalabroCore
+import BalabroEngine
 import Foundation
 import os
 
@@ -71,23 +72,10 @@ final class BotProcess: Sendable {
         try process.run()
 
         let output = AsyncStream<BotOutput> { continuation in
-            // Not `FileHandle.bytes`: all its reads queue behind one another, so a game with nothing to say would stop
-            // Claude's reply from being read, and that reply is what the game is waiting for.
-            DispatchQueue.global().async {
-                let handle = stdout.fileHandleForReading
-                var pending = Data()
-                while case let chunk = handle.availableData, !chunk.isEmpty {
-                    pending.append(chunk)
-                    while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
-                        let line = String(decoding: pending[pending.startIndex..<newline], as: UTF8.self)
-                        pending = pending[(newline + 1)...]
-                        continuation.yield(.line(line))
-                    }
-                }
-                Task {
-                    for await status in exit { continuation.yield(.exited(status)) }
-                    continuation.finish()
-                }
+            Task {
+                for await line in LineReader.lines(from: stdout.fileHandleForReading) { continuation.yield(.line(line)) }
+                for await status in exit { continuation.yield(.exited(status)) }
+                continuation.finish()
             }
         }
         return (BotProcess(process: process, stdin: stdin.fileHandleForWriting), output)

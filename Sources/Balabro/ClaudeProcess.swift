@@ -1,4 +1,5 @@
 import BalabroCore
+import BalabroEngine
 import Foundation
 
 /// Spawns one `claude -p` per turn and streams its output.
@@ -34,16 +35,14 @@ enum ClaudeProcess {
                 try? stdin.fileHandleForWriting.write(contentsOf: ClaudeInvocation.stdinLine(request.message))
                 try? stdin.fileHandleForWriting.close()
 
-                async let errorText = String(decoding: (try? await stderr.fileHandleForReading.bytes.reduce(into: Data()) { $0.append($1) }) ?? Data(), as: UTF8.self)
+                async let errorLines = LineReader.lines(from: stderr.fileHandleForReading).reduce(into: []) { $0.append($1) }
                 var decoder = StreamDecoder()
-                do {
-                    for try await line in stdout.fileHandleForReading.bytes.lines {
-                        if let output = decoder.feed(Data(line.utf8)) { continuation.yield(output) }
-                    }
-                } catch {}
+                for await line in LineReader.lines(from: stdout.fileHandleForReading) {
+                    if let output = decoder.feed(Data(line.utf8)) { continuation.yield(output) }
+                }
                 var status: Int32 = -1
                 for await code in exit { status = code }
-                if let output = decoder.finish(status: status, stderr: await errorText) { continuation.yield(output) }
+                if let output = decoder.finish(status: status, stderr: await errorLines.joined(separator: "\n")) { continuation.yield(output) }
                 continuation.finish()
             }
 

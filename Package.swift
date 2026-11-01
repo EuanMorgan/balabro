@@ -10,11 +10,14 @@ var targets: [Target] = [
         dependencies: ["BalabroCore"],
         resources: [.copy("Fixtures")]
     ),
+    // The portable shell both apps use: the runtimes, the claude and bot processes, the save watcher.
+    .target(name: "BalabroEngine", dependencies: ["BalabroCore"]),
+    .testTarget(name: "BalabroEngineTests", dependencies: ["BalabroEngine"]),
 ]
 
 #if os(macOS)
-// The thin shell: file watching, the claude process, screen capture, the overlay.
-targets.append(.executableTarget(name: "Balabro", dependencies: ["BalabroCore"]))
+// The Mac face: screen capture, the overlay, the hotkey, the updater.
+targets.append(.executableTarget(name: "Balabro", dependencies: ["BalabroCore", "BalabroEngine"]))
 #endif
 
 let package = Package(
