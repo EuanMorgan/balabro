@@ -1,3 +1,4 @@
+import BalabroCore
 import Foundation
 
 /// Real files, never hand-built Lua: the saves come from `tools/driver/run.sh` (seed BALABRO1, Red Deck,
@@ -7,7 +8,7 @@ enum Fixture {
     static func save(_ name: String) -> Data { data("saves/\(name).jkr") }
     /// The save's Lua text, for tests that change one key of a real save to reach a state the driver didn't.
     static func saveText(_ name: String) -> String {
-        String(decoding: try! (save(name) as NSData).decompressed(using: .zlib) as Data, as: UTF8.self)
+        String(decoding: try! Inflate.raw(save(name)), as: UTF8.self)
     }
     static func stream(_ name: String) -> [Data] {
         data("claude-stream/\(name).jsonl").split(separator: UInt8(ascii: "\n")).map { Data($0) }

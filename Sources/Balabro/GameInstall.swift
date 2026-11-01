@@ -19,19 +19,15 @@ struct GameInstall: Sendable {
 
     var love: URL { app.appending(path: "Contents/Resources/Balatro.love") }
 
-    /// `Balatro.love` is a zip. `/usr/bin/unzip -p <love> <entry>` ships with macOS, so we don't carry
-    /// a zip reader. Cached under `Application Support/Balabro/game/<love mtime>/`, so a game update re-extracts.
+    /// Cached under `Application Support/Balabro/game/<love mtime>/`, so a game update re-extracts.
     func extract(_ entry: String) async throws -> URL {
         let modified = try love.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast
         let cached = URL.applicationSupportDirectory
             .appending(path: "Balabro/game/\(Int(modified.timeIntervalSince1970))")
             .appending(path: entry)
         if FileManager.default.fileExists(atPath: cached.path) { return cached }
-        guard let result = await Command.run(URL(filePath: "/usr/bin/unzip"), ["-p", love.path, entry], timeout: .seconds(30)),
-              result.status == 0, !result.output.isEmpty
-        else { throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: "\(love.path)/\(entry)"]) }
         try FileManager.default.createDirectory(at: cached.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try result.output.write(to: cached, options: .atomic)
+        try ZipArchive(file: love).read(entry).write(to: cached, options: .atomic)
         return cached
     }
 

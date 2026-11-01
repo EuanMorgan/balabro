@@ -21,8 +21,9 @@ struct SaveFileTests {
         #expect(s.openingBooster?.key == CenterKey(rawValue: "p_buffoon_normal_2"))
     }
 
-    @Test func halfWrittenFileIsIncomplete() {
-        #expect(throws: SaveFileError.incomplete) { try SaveFile.decode(Fixture.save("02-hand").prefix(3000), profile: 1) }
+    @Test(arguments: [1, 3000, 6379])
+    func halfWrittenFileIsIncomplete(bytesMissing: Int) {
+        #expect(throws: SaveFileError.incomplete) { try SaveFile.decode(Fixture.save("02-hand").dropLast(bytesMissing), profile: 1) }
     }
 
     @Test func plainLuaTextIsAccepted() throws {
