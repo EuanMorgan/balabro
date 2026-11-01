@@ -1,17 +1,16 @@
 import BalabroCore
-import BalabroEngine
 import Foundation
 
 /// Spawns one `claude -p` per turn and streams its output.
 enum ClaudeProcess {
-    /// Cancelling the consuming task sends SIGINT, then SIGTERM after 2 s. The forked session the
+    /// Cancelling the consuming task ends the process (`Platform.interrupt`). The forked session the
     /// process was writing is abandoned; `Coach` never forks from it.
     static func run(_ request: TurnRequest, with invocation: ClaudeInvocation) -> AsyncStream<TurnOutput> {
         AsyncStream { continuation in
             let process = Process()
             process.executableURL = invocation.executable
             process.arguments = invocation.arguments(forkFrom: request.forkFrom)
-            process.environment = invocation.environment(inheriting: ClaudeLocator.userEnvironment)
+            process.environment = Platform.claudeEnvironment(invocation)
             process.currentDirectoryURL = invocation.workingDirectory
             let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
             (process.standardInput, process.standardOutput, process.standardError) = (stdin, stdout, stderr)
@@ -49,38 +48,23 @@ enum ClaudeProcess {
             continuation.onTermination = { reason in
                 guard case .cancelled = reason else { return }
                 reader.cancel()
-                process.interrupt()
-                let pid = process.processIdentifier
-                DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                    if process.isRunning { kill(pid, SIGTERM) }
-                }
+                Platform.interrupt(process)
             }
         }
     }
 }
 
-/// Finds `claude` and the user's config dir for an app launched from Finder, which inherits
+/// Finds `claude` and the config dir it should use. On the Mac, an app launched from Finder inherits
 /// neither `~/.local/bin` on PATH nor `CLAUDE_CONFIG_DIR` from `~/.zshrc`.
 enum ClaudeLocator {
-    /// Order: the user's override, then the last result that still works, then their login shell,
-    /// then well-known install paths. Every candidate must pass `claude --version`, and the winner is
-    /// saved, so the login-shell probe runs once, not per launch.
+    /// Order: the user's override, then the last result that still works, then `Platform.claudeCandidates`.
+    /// Every candidate must pass `claude --version`, and the winner is saved, so the Mac's login-shell probe
+    /// runs once, not per launch.
     static func resolve(override: ClaudeInvocation?, workingDirectory: URL) async -> ClaudeInvocation? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        var candidates: [() async -> ClaudeInvocation?] = [
+        let candidates: [@Sendable () async -> ClaudeInvocation?] = [
             { override },
             { saved(workingDirectory: workingDirectory) },
-            { await loginShell(workingDirectory: workingDirectory) },
-        ]
-        let shellPath = "/usr/bin:/bin:/usr/sbin:/sbin"
-        for path in [".local/bin/claude", ".claude/local/claude"].map({ home.appending(path: $0).path }) + ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"] {
-            candidates.append {
-                ClaudeInvocation(
-                    executable: URL(filePath: path), configDir: nil,
-                    searchPath: "\(URL(filePath: path).deletingLastPathComponent().path):/opt/homebrew/bin:\(shellPath)",
-                    workingDirectory: workingDirectory)
-            }
-        }
+        ] + Platform.claudeCandidates(workingDirectory: workingDirectory)
         for candidate in candidates {
             guard let invocation = await candidate(), await works(invocation) else { continue }
             save(invocation)
@@ -90,24 +74,13 @@ enum ClaudeLocator {
     }
 
     private static func works(_ invocation: ClaudeInvocation) async -> Bool {
-        guard FileManager.default.isExecutableFile(atPath: invocation.executable.path) else { return false }
-        let env = invocation.environment(inheriting: userEnvironment)
-        return await Command.run(invocation.executable, ["--version"], environment: env, timeout: .seconds(10))?.status == 0
-    }
-
-    /// The app's environment, plus the account basics a process started with an empty environment lacks.
-    static var userEnvironment: [String: String] {
-        let user = NSUserName()
-        let shell = getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
-        return ProcessInfo.processInfo.environment.merging(
-            ["HOME": FileManager.default.homeDirectoryForCurrentUser.path, "USER": user, "LOGNAME": user, "SHELL": shell]
-        ) { inherited, _ in inherited }
+        await Command.run(invocation.executable, ["--version"], environment: Platform.claudeEnvironment(invocation), timeout: .seconds(10))?.status == 0
     }
 
     /// `-i` because `.zshrc` (where this user sets CLAUDE_CONFIG_DIR) only loads for interactive shells.
     /// The record separators fence off anything the shell's startup files print.
-    private static func loginShell(workingDirectory: URL) async -> ClaudeInvocation? {
-        let shellEnv = userEnvironment.merging(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]) { inherited, _ in inherited }
+    static func loginShell(environment: [String: String], workingDirectory: URL) async -> ClaudeInvocation? {
+        let shellEnv = environment.merging(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TERM": "dumb"]) { inherited, _ in inherited }
         let shell = shellEnv["SHELL"]!
         let script = #"printf "\x1e%s\x1e%s\x1e%s\x1e" "$(command -v claude)" "$CLAUDE_CONFIG_DIR" "$PATH""#
         guard let result = await Command.run(URL(filePath: shell), ["-l", "-i", "-c", script], environment: shellEnv, timeout: .seconds(5)) else { return nil }

@@ -9,9 +9,7 @@ struct SaveWatcher: Sendable {
     let root: URL
     static let profiles = 1...3
 
-    static var defaultRoot: URL { .applicationSupportDirectory.appending(path: "Balatro") }
-
-    /// First yields one event per save already on disk, then one per change.
+        /// First yields one event per save already on disk, then one per change.
     ///
     /// FSEvents on the directory, not a file descriptor on the file: the game deletes and recreates
     /// `save.jkr`, which orphans a descriptor.

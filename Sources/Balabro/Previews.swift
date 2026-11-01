@@ -1,6 +1,7 @@
 #if DEBUG
 import AppKit
 import BalabroCore
+import BalabroEngine
 import SwiftUI
 
 /// `Balabro --render-previews <dir>` (debug builds only) writes the overlay in five states as PNGs.
@@ -37,7 +38,7 @@ enum Previews {
             try? png.write(to: url)
             print(url.path)
         }
-        let stats = StatsView(data: StatsData.load(savesRoot: SaveWatcher.defaultRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing)
+        let stats = StatsView(data: StatsData.load(savesRoot: Platform.defaultSavesRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing)
         try? snapshot(stats, width: 520, height: 900)?.write(to: directory.appending(path: "stats.png"))
         return 0
     }

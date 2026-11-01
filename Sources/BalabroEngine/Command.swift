@@ -1,10 +1,10 @@
 import Foundation
 
-enum Command {
+public enum Command {
     /// Stdout goes to a temporary file, not a pipe: an interactive shell can leave background jobs
     /// (prompt themes start daemons) holding a pipe open long after the command itself exits.
     /// Returns nil if the command can't start or outlives `timeout`.
-    static func run(
+    public static func run(
         _ executable: URL, _ arguments: [String], environment: [String: String]? = nil, timeout: Duration
     ) async -> (status: Int32, output: Data)? {
         let outputURL = FileManager.default.temporaryDirectory.appending(path: "balabro-\(UUID().uuidString)")
@@ -27,11 +27,9 @@ enum Command {
                 done.resume(returning: nil)
                 return
             }
-            let pid = process.processIdentifier
             Task {
                 try? await Task.sleep(for: timeout)
-                // SIGKILL: an interactive shell ignores SIGTERM.
-                if process.isRunning { kill(pid, SIGKILL) }
+                Platform.kill(process)
             }
         }
         try? output.close()

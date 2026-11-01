@@ -1,4 +1,5 @@
 import AppKit
+import BalabroEngine
 import CoreGraphics
 import Foundation
 import ImageIO

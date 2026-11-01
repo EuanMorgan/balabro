@@ -1,13 +1,12 @@
 import BalabroCore
 import Foundation
-import os
 
-/// `~/Library/Application Support/Balabro/runs/<RunKey>.json`, one file per run.
+/// `runs/<RunKey>.json` in the data folder, one file per run.
 /// A projection of `CoachState`, written whole on each `.save` effect, never read back except at launch.
-struct RunStore: Sendable {
+public struct RunStore: Sendable {
     let directory: URL
 
-    static var `default`: RunStore { RunStore(directory: .applicationSupportDirectory.appending(path: "Balabro/runs")) }
+    public static var `default`: RunStore { RunStore(directory: Platform.dataFolder.appending(path: "runs")) }
 
     /// Unreadable files are skipped and logged, not fatal: losing one run's history beats not starting.
     func loadAll() -> [RunRecord] {
@@ -16,7 +15,7 @@ struct RunStore: Sendable {
             do {
                 return try RunRecord(json: Data(contentsOf: file))
             } catch {
-                Logger.balabro.error("Skipping unreadable run \(file.lastPathComponent, privacy: .public): \(error)")
+                Platform.log("Skipping unreadable run \(file.lastPathComponent): \(error)")
                 return nil
             }
         }
@@ -36,8 +35,4 @@ struct RunStore: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try record.json().write(to: directory.appending(path: "\(record.key).json"), options: .atomic)
     }
-}
-
-extension Logger {
-    static let balabro = Logger(subsystem: "com.euanmorgan.balabro", category: "app")
 }
