@@ -14,6 +14,7 @@ namespace Balabro.Windows;
 /// claude and the bot's game copies go with the app even if it crashes or is killed.
 internal sealed class EngineLink : IDisposable
 {
+    private readonly string _executable;
     private readonly string[] _arguments;
     private readonly object _writeLock = new();
     private Process? _process;
@@ -24,14 +25,16 @@ internal sealed class EngineLink : IDisposable
     /// On the reader thread, once per start, with the exit code (or null if it never started).
     public event Action<int?>? Exited;
 
-    public EngineLink(string[] arguments) => _arguments = arguments;
+    public EngineLink(string[] arguments) : this(ExecutablePath, arguments) { }
+
+    internal EngineLink(string executable, string[] arguments) => (_executable, _arguments) = (executable, arguments);
 
     public static string ExecutablePath => Path.Combine(AppContext.BaseDirectory, "balabro-engine.exe");
 
     public void Start()
     {
         Stop();
-        var info = new ProcessStartInfo(ExecutablePath)
+        var info = new ProcessStartInfo(_executable)
         {
             WorkingDirectory = AppContext.BaseDirectory,
             UseShellExecute = false,
@@ -53,7 +56,7 @@ internal sealed class EngineLink : IDisposable
         }
         catch (Exception error) when (error is Win32Exception or InvalidOperationException)
         {
-            Log.Write($"Couldn't start {ExecutablePath}: {error.Message}");
+            Log.Write($"Couldn't start {_executable}: {error.Message}");
             ThreadPool.QueueUserWorkItem(_ => Exited?.Invoke(null));
             return;
         }
@@ -64,17 +67,26 @@ internal sealed class EngineLink : IDisposable
         _process = process;
         Log.Write($"Started the engine, pid {process.Id}, arguments [{string.Join(" ", _arguments)}]");
 
-        new Thread(() => ReadLines(process)) { IsBackground = true, Name = "engine stdout" }.Start();
+        // Read from these, not the process: Stop() disposes it, and its properties then throw.
+        var stdout = process.StandardOutput;
+        var stderr = process.StandardError;
+        new Thread(() => ReadLines(process, stdout)) { IsBackground = true, Name = "engine stdout" }.Start();
         // The engine logs to its own file too. Its stderr is drained so a full pipe can never block it.
-        new Thread(() => { try { while (process.StandardError.ReadLine() is not null) { } } catch (IOException) { } })
-        { IsBackground = true, Name = "engine stderr" }.Start();
+        new Thread(() => Drain(stderr)) { IsBackground = true, Name = "engine stderr" }.Start();
     }
 
-    private void ReadLines(Process process)
+    /// Ends at the end of the stream, or when it fails or is closed under it: an exception here would end the app.
+    private static void Drain(StreamReader reader)
+    {
+        try { while (reader.ReadLine() is not null) { } }
+        catch (Exception) { }
+    }
+
+    private void ReadLines(Process process, StreamReader stdout)
     {
         try
         {
-            while (process.StandardOutput.ReadLine() is { } line)
+            while (stdout.ReadLine() is { } line)
             {
                 if (line.Length == 0) continue;
                 HostMessage message;
@@ -88,14 +100,13 @@ internal sealed class EngineLink : IDisposable
                 catch (Exception error) { Log.Write($"Handling a {message.GetType().Name} line failed: {error}"); }
             }
         }
-        catch (Exception error) when (error is IOException or ObjectDisposedException or InvalidOperationException) { }
+        catch (Exception) { }
+        if (!ReferenceEquals(process, _process)) return;
         int? code = null;
-        try { process.WaitForExit(2000); code = process.HasExited ? process.ExitCode : null; } catch (InvalidOperationException) { }
-        if (ReferenceEquals(process, _process))
-        {
-            Log.Write($"The engine stopped, exit code {code?.ToString() ?? "unknown"}");
-            Exited?.Invoke(code);
-        }
+        try { process.WaitForExit(2000); code = process.HasExited ? process.ExitCode : null; } catch (Exception) { }
+        Log.Write($"The engine stopped, exit code {code?.ToString() ?? "unknown"}");
+        try { Exited?.Invoke(code); }
+        catch (Exception error) { Log.Write($"Handling the engine stopping failed: {error}"); }
     }
 
     public void Send(string line)
@@ -120,8 +131,9 @@ internal sealed class EngineLink : IDisposable
         if (process is not null)
         {
             try { process.StandardInput.Close(); } catch (Exception error) when (error is IOException or InvalidOperationException) { }
-            try { process.WaitForExit(3000); } catch (InvalidOperationException) { }
-            Log.Write(process.HasExited ? "The engine exited when asked" : "The engine didn't exit in 3 s, so the job closes it");
+            var exited = false;
+            try { exited = process.WaitForExit(3000); } catch (InvalidOperationException) { }
+            Log.Write(exited ? "The engine exited when asked" : "The engine didn't exit in 3 s, so the job closes it");
         }
         if (_job != IntPtr.Zero)
         {
