@@ -1,6 +1,5 @@
 import BalabroCore
 import CoreServices
-import CryptoKit
 import Foundation
 
 /// Watches the Balatro save root and turns writes of any `<profile>/save.jkr` into coach events.
@@ -35,7 +34,7 @@ struct SaveWatcher: Sendable {
 
         return AsyncStream { continuation in
             let reader = Task {
-                var lastRead: [Int: SHA256.Digest] = [:]
+                var lastRead: [Int: Data] = [:]
                 for await profile in changed {
                     let url = root.appending(path: "\(profile)/save.jkr")
                     guard let bytes = try? Data(contentsOf: url) else {
@@ -43,9 +42,9 @@ struct SaveWatcher: Sendable {
                         continue
                     }
                     // FSEvents often reports one write twice.
-                    guard SHA256.hash(data: bytes) != lastRead[profile] else { continue }
+                    guard bytes != lastRead[profile] else { continue }
                     let (settled, result) = await Self.settle(at: url, profile: profile, first: bytes)
-                    lastRead[profile] = SHA256.hash(data: settled)
+                    lastRead[profile] = settled
                     switch result {
                     case .success(let snapshot): continuation.yield(.saveWritten(snapshot))
                     case .failure(let error): continuation.yield(.saveUnreadable(profile: profile, error))

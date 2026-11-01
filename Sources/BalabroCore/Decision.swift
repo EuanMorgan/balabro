@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// A moment where the player has a choice to make and the coach should speak.
@@ -110,6 +109,6 @@ public struct Fingerprint: RawRepresentable, Sendable, Hashable, Codable {
     public var rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
     public static func of(_ prompt: String) -> Fingerprint {
-        Fingerprint(rawValue: SHA256.hash(data: Data(prompt.utf8)).map { String(format: "%02x", $0) }.joined())
+        Fingerprint(rawValue: SHA256.hex(Data(prompt.utf8)))
     }
 }
