@@ -1,0 +1,22 @@
+{
+  "type": "coach",
+  "view": {
+    "canRetry": false,
+    "goal": "win",
+    "headline": "Ante 1 · Buffoon Pack",
+    "problem": {
+      "kind": "screenRecordingDenied",
+      "message": "Couldn't see Balatro's window. Make sure it's open, not minimised, and in Borderless mode. On a Mac, also check Balabro is allowed in System Settings › Privacy & Security › Screen Recording, then quit and reopen it."
+    },
+    "sawScreen": false,
+    "score": [],
+    "status": "thinking",
+    "thread": [],
+    "waitingCaptions": [
+      "Peeking inside",
+      "Reading the cards",
+      "Picking a favourite"
+    ],
+    "waitingOn": "openPack"
+  }
+}
