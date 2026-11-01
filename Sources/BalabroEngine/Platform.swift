@@ -52,6 +52,18 @@ public enum Platform {
         #endif
     }
 
+    /// The release version, or "dev" for a build from source. The Windows zip has no Info.plist, so the packaging script
+    /// writes the version to `version.txt` beside the engine.
+    public static let version: String = {
+        #if os(Windows)
+        let file = Bundle.main.executableURL?.deletingLastPathComponent().appending(path: "version.txt")
+        let text = file.flatMap { try? String(contentsOf: $0, encoding: .utf8) }?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.flatMap { $0.isEmpty ? nil : $0 } ?? "dev"
+        #else
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        #endif
+    }()
+
     /// A path for another program, such as the game copy's Lua or the Windows app.
     public static func path(_ url: URL) -> String {
         #if os(Windows)
