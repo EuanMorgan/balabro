@@ -38,7 +38,7 @@ enum Previews {
             try? png.write(to: url)
             print(url.path)
         }
-        let stats = StatsView(data: StatsData.load(savesRoot: Platform.defaultSavesRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing)
+        let stats = StatsView(page: StatsPage(StatsData.load(savesRoot: Platform.defaultSavesRoot, store: .default), text: await GameInstall.find()?.loadText() ?? .missing))
         try? snapshot(stats, width: 520, height: 900)?.write(to: directory.appending(path: "stats.png"))
         return 0
     }

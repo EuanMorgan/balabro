@@ -56,7 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem?
     private let updater = Updater()
-    private var gameText = GameText.missing
     private var statsWindow: NSWindow?
 
     init(savesRoot: URL) { self.savesRoot = savesRoot }
@@ -67,7 +66,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func launch() async {
         let engine = await Engine.start(savesRoot: savesRoot, capture: GameWindow.capturePNG)
-        gameText = engine.text
         _ = await engine.game?.registerFont()
         let overlay = OverlayPanel(runtime: engine.coach, pilot: engine.pilot, updater: updater)
         overlay.orderFrontRegardless()
@@ -99,7 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showStats() {
         statsWindow?.close()
-        let window = makeStatsWindow(StatsData.load(savesRoot: savesRoot, store: .default), text: gameText)
+        guard let engine else { return }
+        let window = makeStatsWindow(engine.stats())
         statsWindow = window
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)

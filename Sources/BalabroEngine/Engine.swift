@@ -8,11 +8,12 @@ public final class Engine {
     public let pilot: PilotRuntime
     public let game: GameInstall?
     public let text: GameText
+    private let savesRoot: URL
     private let scorer: Scorer?
     private let watching: Task<Void, Never>
 
-    private init(coach: CoachRuntime, pilot: PilotRuntime, game: GameInstall?, text: GameText, scorer: Scorer?, watching: Task<Void, Never>) {
-        (self.coach, self.pilot, self.game, self.text, self.scorer, self.watching) = (coach, pilot, game, text, scorer, watching)
+    private init(coach: CoachRuntime, pilot: PilotRuntime, game: GameInstall?, text: GameText, savesRoot: URL, scorer: Scorer?, watching: Task<Void, Never>) {
+        (self.coach, self.pilot, self.game, self.text, self.savesRoot, self.scorer, self.watching) = (coach, pilot, game, text, savesRoot, scorer, watching)
     }
 
     /// Watches `savesRoot` from the moment it returns. `capture` is a PNG of the game's window, or nil when there's none.
@@ -25,7 +26,12 @@ public final class Engine {
             coach: Coach(text: text, scoreWait: scorer == nil ? nil : .seconds(8)), store: .default, claude: claude, scorer: scorer, capture: capture)
         let pilot = PilotRuntime(pilot: Pilot(text: text), results: .default, claude: claude, game: game)
         let watching = Task { await coach.start(watching: savesRoot) }
-        return Engine(coach: coach, pilot: pilot, game: game, text: text, scorer: scorer, watching: watching)
+        return Engine(coach: coach, pilot: pilot, game: game, text: text, savesRoot: savesRoot, scorer: scorer, watching: watching)
+    }
+
+    /// Read afresh each time, so it includes the run being played.
+    public func stats() -> StatsPage {
+        StatsPage(StatsData.load(savesRoot: savesRoot, store: .default), text: text)
     }
 
     /// Stops watching the saves, ends the claude turns and waits for their processes to exit, and closes the bot's
