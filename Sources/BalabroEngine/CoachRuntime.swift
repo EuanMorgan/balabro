@@ -19,6 +19,7 @@ public final class CoachRuntime {
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
     @ObservationIgnored private let capture: @Sendable () async -> Data?
     @ObservationIgnored private var savesRoot: URL?
+    @ObservationIgnored private var shutDown = false
 
     private static let goalKey = "goal"
     /// `--resume` only finds sessions filed under the cwd the CLI ran in, so every turn uses this one.
@@ -46,7 +47,17 @@ public final class CoachRuntime {
         send(.setGoal(goal))
     }
 
+    /// Ends the claude turns and waits for their processes to exit, then ignores everything, because Balabro is quitting.
+    func shutdown() async {
+        shutDown = true
+        let running = Array(turns.values)
+        turns = [:]
+        running.forEach { $0.cancel() }
+        for turn in running { await turn.value }
+    }
+
     private func send(_ event: CoachEvent) {
+        guard !shutDown else { return }
         let effects = coach.reduce(&state, event)
         view = state.view
         effects.forEach(perform)
@@ -60,7 +71,9 @@ public final class CoachRuntime {
                 return
             }
             turns[request.id] = Task {
-                for await output in ClaudeProcess.run(request, with: claude) { send(.turnOutput(request.id, output)) }
+                let turn = ClaudeProcess.run(request, with: claude)
+                for await output in turn.output { send(.turnOutput(request.id, output)) }
+                await turn.ended.value
                 turns[request.id] = nil
             }
         case .cancelTurn(let id):

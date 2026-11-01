@@ -84,10 +84,14 @@ public enum AppMessage: Sendable, Equatable {
 public final class HostLink {
     private let input: FileHandle
     private let output: FileHandle
+    private let captureLimit: Duration
     private var captures: [Int: CheckedContinuation<Data?, Never>] = [:]
     private var nextCapture = 0
 
-    public init(input: FileHandle, output: FileHandle) { (self.input, self.output) = (input, output) }
+    /// A screenshot the app hasn't sent within `captureLimit` is nil, and the reply is ignored if it comes later.
+    public init(input: FileHandle, output: FileHandle, captureLimit: Duration = .seconds(5)) {
+        (self.input, self.output, self.captureLimit) = (input, output, captureLimit)
+    }
 
     public func screenshot() async -> Data? {
         let id = nextCapture
@@ -95,6 +99,10 @@ public final class HostLink {
         return await withCheckedContinuation { continuation in
             captures[id] = continuation
             send(.capture(id: id))
+            Task {
+                try? await Task.sleep(for: captureLimit)
+                captures.removeValue(forKey: id)?.resume(returning: nil)
+            }
         }
     }
 
@@ -104,14 +112,23 @@ public final class HostLink {
         let font = try? await engine.game?.extract("resources/fonts/m6x11plus.ttf")
         send(.hello(version: Platform.version, fontPath: font.map(Platform.path)))
         let watchers = [watch { .coach(engine.coach.view) }, watch { .pilot(engine.pilot.view) }]
+        await listen { handle($0, engine) }
+        watchers.forEach { $0.cancel() }
+    }
+
+    /// Reads the app's lines until it closes stdin. Screenshots answer `screenshot()`, and every other line goes to `act`.
+    public func listen(_ act: (AppMessage) -> Void) async {
         for await line in LineReader.lines(from: input) {
             guard let message = AppMessage(line: line) else {
                 Platform.log("Ignoring a line from the app: \(line.prefix(200))")
                 continue
             }
-            handle(message, engine)
+            if case .screenshot(let id, let png) = message {
+                captures.removeValue(forKey: id)?.resume(returning: png)
+            } else {
+                act(message)
+            }
         }
-        watchers.forEach { $0.cancel() }
         captures.values.forEach { $0.resume(returning: nil) }
         captures = [:]
     }
@@ -126,7 +143,7 @@ public final class HostLink {
         case .playForMe(let goal): engine.pilot.start(goal: goal)
         case .stopPilot: engine.pilot.stop()
         case .dismissPilot: engine.pilot.dismiss()
-        case .screenshot(let id, let png): captures.removeValue(forKey: id)?.resume(returning: png)
+        case .screenshot: break
         }
     }
 
