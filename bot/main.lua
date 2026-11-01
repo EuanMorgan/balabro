@@ -31,13 +31,14 @@ local run = sandbox("bot/run.lua")
 local brief = sandbox("bot/brief.lua")
 local scorer = sandbox("bot/scorer.lua")
 
-io.stdout:setvbuf("line")
+-- On Windows "line" acts as full buffering, so nothing would reach Balabro until the game quit.
+io.stdout:setvbuf("no")
 
 local function clean(text) return (tostring(text):gsub("[\r\n]+", " / ")) end
 local function send(...)
   local parts = { ... }
   for i, part in ipairs(parts) do parts[i] = clean(part) end
-  io.stdout:write("@@", table.concat(parts, "|"), "\n")
+  io.stdout:write("@@" .. table.concat(parts, "|") .. "\n")
 end
 
 -- Reading stdin blocks, so it has its own thread. The end of stdin means Balabro has gone, however it went.
@@ -93,7 +94,6 @@ end
 
 local function fail(kind, detail)
   send("broken", kind, detail)
-  io.stdout:flush()
   os.exit(3)
 end
 
