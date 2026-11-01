@@ -20,8 +20,7 @@ struct BotInstall: Sendable {
         if !files.fileExists(atPath: install.runtime.path) {
             try? files.removeItem(at: root)
             try files.createDirectory(at: install.gameFolder, withIntermediateDirectories: true)
-            guard let unzip = await Command.run(URL(filePath: "/usr/bin/unzip"), ["-q", game.love.path, "-d", install.gameFolder.path], timeout: .seconds(60)), unzip.status == 0
-            else { throw CocoaError(.fileReadCorruptFile) }
+            try ZipArchive(file: game.love).extractAll(to: install.gameFolder)
             let main = install.gameFolder.appending(path: "main.lua")
             let handle = try FileHandle(forWritingTo: main)
             try handle.seekToEnd()
