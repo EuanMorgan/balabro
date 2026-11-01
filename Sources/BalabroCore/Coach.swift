@@ -9,11 +9,13 @@ import Foundation
 /// - Every turn forks from `RunRecord.head`, the session after the last *completed* turn, and only
 ///   a completed turn moves `head`. So cancelling a turn, a crash mid-turn, or a quit leaves the
 ///   conversation exactly as it was. Nothing to repair, and every transition is safe to repeat.
+/// - A head made on another computer can't be resumed here, so that turn starts a new conversation told the run so far.
 /// - A new decision cancels an in-flight decision turn: its advice is about a board that no longer exists.
 /// - A new decision never cancels a question the player typed. It waits, newest decision wins.
 /// - Questions asked while Claude is busy are queued and joined, then run before any waiting decision.
 public struct Coach: Sendable {
     public let text: GameText
+    public let machine: MachineID
     /// How long after a pack opens before the cards have finished flying in.
     public var packSettleDelay: Duration = .milliseconds(1800)
     /// A skip tag plays its own animation before the pack starts to open.
@@ -28,7 +30,9 @@ public struct Coach: Sendable {
     /// A pack waits longer, because without the reload its jokers have no names. A cold start of the scorer takes about 28 s.
     public var packScoreWait: Duration = .seconds(40)
 
-    public init(text: GameText, scoreWait: Duration? = nil) { (self.text, self.scoreWait) = (text, scoreWait) }
+    public init(text: GameText, machine: MachineID, scoreWait: Duration? = nil) {
+        (self.text, self.machine, self.scoreWait) = (text, machine, scoreWait)
+    }
 
     public func reduce(_ state: inout CoachState, _ event: CoachEvent) -> [CoachEffect] {
         switch event {
@@ -136,7 +140,7 @@ public struct Coach: Sendable {
                 }
                 (state.scoreNote, state.exactScores) = (nil, nil)
                 var record = state.runs[key]!
-                record.head = session
+                (record.head, record.headMachine) = (session, machine)
                 record.rules = Prompt.rulesVersion
                 record.transcript.append(Exchange(title: turn.purpose.title, advice: answer, isQuestion: turn.purpose.isQuestion, sawScreen: turn.sawScreen))
                 if let decision = turn.purpose.decision { record.lastCoached = decision.fingerprint }
@@ -272,13 +276,15 @@ public struct Coach: Sendable {
         }
         // The next run's advice is a conversation of its own, because it isn't part of the run just played.
         let conversation = if case .nextRun = purpose { RunRecord?.none } else { record }
-        let rules = conversation?.head != nil && conversation?.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
+        let head = conversation?.head(on: machine)
+        let retold = conversation.flatMap { head == nil && $0.head != nil ? Prompt.runSoFar($0.transcript) : nil } ?? ""
+        let rules = head != nil && conversation?.rules != Prompt.rulesVersion ? Prompt.rulesChanged : ""
         let note = conversation != nil ? state.scoreNote.map { $0 + "\n\n" } ?? "" : ""
         let id = TurnID(state.takeID())
         state.activity = .running(.init(id: id, purpose: purpose, partial: "", sawScreen: screenshot != nil))
         state.retryable = nil
         state.problem = screenshotFailed ? .screenRecordingDenied : nil
-        return [.startTurn(TurnRequest(id: id, forkFrom: conversation?.head, message: UserMessage(text: rules + note + text, screenshotPNG: screenshot)))]
+        return [.startTurn(TurnRequest(id: id, forkFrom: head, message: UserMessage(text: rules + retold + note + text, screenshotPNG: screenshot)))]
     }
 
     private func startNext(_ state: inout CoachState) -> [CoachEffect] {
@@ -484,6 +490,12 @@ public struct TurnID: Sendable, Hashable, Codable { public let value: Int; publi
 public struct ScoreID: Sendable, Hashable { public let value: Int; public init(_ value: Int) { self.value = value } }
 public struct CaptureID: Sendable, Hashable { public let value: Int; public init(_ value: Int) { self.value = value } }
 
+/// One computer's Balabro, from `machine.json`. Claude's sessions are kept per computer.
+public struct MachineID: RawRepresentable, Sendable, Hashable, Codable {
+    public var rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+}
+
 public struct SessionID: RawRepresentable, Sendable, Hashable, Codable {
     public var rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -517,6 +529,8 @@ public struct RunRecord: Sendable, Hashable, Codable {
     public var progress: ProgressClock
     /// The session after the last completed turn. The CLI holds the conversation; this points at it.
     public var head: SessionID?
+    /// The computer that made `head`. nil for records from before Balabro synced between computers, which were made here.
+    public var headMachine: MachineID?
     public var lastCoached: Fingerprint?
     /// Rebuilds the overlay's plan and follow-ups after a restart.
     public var transcript: [Exchange]
@@ -547,6 +561,10 @@ public struct PredictionTally: Sendable, Hashable, Codable {
 }
 
 extension RunRecord {
+    func head(on machine: MachineID) -> SessionID? {
+        headMachine == nil || headMachine == machine ? head : nil
+    }
+
     /// JSON has no infinity, and a best hand of naneinf is one.
     public func json() throws -> Data {
         let encoder = JSONEncoder()

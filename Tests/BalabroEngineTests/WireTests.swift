@@ -29,7 +29,7 @@ struct WireTests {
         #expect(try decoder.decode(JSON.self, from: line) == decoder.decode(JSON.self, from: golden), "\(name).json differs from \(String(decoding: line, as: UTF8.self))")
     }
 
-    let coach = Coach(text: .missing)
+    let coach = Coach(text: .missing, machine: MachineID(rawValue: "mac"))
 
     func snap(_ name: String) throws -> RunSnapshot {
         try SaveFile.decode(Data(contentsOf: CoreFixture.url("saves/\(name).jkr")), profile: 1)

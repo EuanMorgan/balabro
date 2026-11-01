@@ -158,6 +158,30 @@ enum Prompt {
 
     static let rulesVersion = Fingerprint.of(system)
 
+    /// A fresh conversation's first message holds about the last two antes of a long run. The latest plan and questions
+    /// matter most, and a whole run is about 60,000 characters, too much to send with one turn.
+    static let runSoFarLimit = 12_000
+
+    static func runSoFar(_ transcript: [Exchange]) -> String {
+        var kept: [String] = []
+        var size = 0
+        for exchange in transcript.reversed() {
+            let entry = exchange.isQuestion
+                ? "The player asked: \(exchange.title)\nYou replied:\n\(exchange.advice)"
+                : "\(exchange.title). You advised:\n\(exchange.advice)"
+            guard size + entry.count <= runSoFarLimit else { break }
+            kept.append(entry)
+            size += entry.count
+        }
+        let left = transcript.count - kept.count
+        let header = """
+            THE RUN SO FAR. This run was coached on the player's other computer, and that conversation isn't here. \
+            These are your answers from it, oldest first\(left > 0 ? ", leaving out the \(left) before them" : ""). \
+            Carry on from them.
+            """
+        return ([header] + kept.reversed()).joined(separator: "\n\n") + "\n\n"
+    }
+
     static func decision(_ kind: Decision.Kind, _ s: RunSnapshot, _ text: GameText, goal: CoachGoal = .win) -> String {
         var lines = goal == .naneinf ? ["GOAL: naneinf. Best hand this run: \(chips(s.bestHandScore))."] : []
         switch kind {

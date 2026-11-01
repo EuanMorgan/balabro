@@ -42,7 +42,7 @@ public enum EngineCommand {
             return 0
         }
         var state = CoachState(restoring: [])
-        _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
+        _ = Coach(text: text, machine: Machine.load().id).reduce(&state, .saveWritten(snapshot))
         print("Kind: \(label(decision.kind))\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
         return 0
     }
@@ -66,7 +66,7 @@ public enum EngineCommand {
     /// Prints what the coach is told when suggesting the next run, from a saves folder such as `Platform.defaultSavesRoot`.
     private static func printNextRun(_ root: URL) async -> Int32 {
         var state = CoachState(restoring: [])
-        let coach = Coach(text: await GameInstall.find()?.loadText() ?? .missing)
+        let coach = Coach(text: await GameInstall.find()?.loadText() ?? .missing, machine: Machine.load().id)
         guard case .startTurn(let request)? = coach.reduce(&state, .progressRead(StatsData.progress(savesRoot: root))).first else {
             print("No profile in \(root.path)")
             return 1
