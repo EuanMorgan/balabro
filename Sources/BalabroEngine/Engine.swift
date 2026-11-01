@@ -22,7 +22,7 @@ public final class Engine {
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: CoachRuntime.conversations)
         let scorer = Scorer(game: game, lua: Platform.botLua)
         let coach = CoachRuntime(
-            coach: Coach(text: text, machine: Machine.load().id, scoreWait: scorer == nil ? nil : .seconds(8)), store: .default, claude: claude, scorer: scorer, capture: capture)
+            coach: Coach(text: text, machine: Machine.load().id, scoreWait: scorer == nil ? nil : .seconds(8)), store: .default, settings: Platform.dataFolder.appending(path: "settings.json"), claude: claude, scorer: scorer, capture: capture)
         let pilot = PilotRuntime(pilot: Pilot(text: text), results: .default, claude: claude, game: game)
         let watching = Task { await coach.start(watching: savesRoot) }
         return Engine(coach: coach, pilot: pilot, game: game, text: text, scorer: scorer, watching: watching)
