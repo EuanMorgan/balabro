@@ -31,7 +31,12 @@ public enum SaveFile {
     }
 
     private static func text(of bytes: Data) throws(SaveFileError) -> String {
-        bytes.starts(with: Data("return".utf8)) ? String(decoding: bytes, as: UTF8.self) : try inflateRaw(bytes)
+        if bytes.starts(with: Data("return".utf8)) { return String(decoding: bytes, as: UTF8.self) }
+        do {
+            return String(decoding: try Inflate.raw(bytes), as: UTF8.self)
+        } catch {
+            throw .incomplete
+        }
     }
 }
 
@@ -41,16 +46,6 @@ public enum SaveFileError: Error, Sendable, Hashable {
     /// The file parsed but a key we rely on is missing or the wrong type. `path` is like `GAME.round_resets.ante`.
     case unexpectedShape(path: String)
     case notLua(offset: Int)
-}
-
-/// `.zlib` in Apple's Compression framework is raw DEFLATE (RFC 1951) with no zlib header,
-/// which is exactly what LÖVE's `love.data.compress('string', 'deflate', ...)` writes.
-func inflateRaw(_ bytes: Data) throws(SaveFileError) -> String {
-    do {
-        return String(decoding: try (bytes as NSData).decompressed(using: .zlib) as Data, as: UTF8.self)
-    } catch {
-        throw .incomplete
-    }
 }
 
 /// A Lua value plus the path it was read from, so a missing key names itself in the error.
