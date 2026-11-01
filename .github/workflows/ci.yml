@@ -23,3 +23,15 @@ jobs:
           swift-build: 6.4.2-RELEASE
       - run: swift build
       - run: swift test
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test windows/Balabro.Windows.sln
+      - name: Package
+        shell: pwsh
+        run: scripts/make-windows.ps1 0.0.0-ci.${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Balabro-0.0.0-ci.${{ github.run_number }}-windows-x64
+          path: dist/Balabro-0.0.0-ci.${{ github.run_number }}-windows-x64.zip
+          if-no-files-found: error
