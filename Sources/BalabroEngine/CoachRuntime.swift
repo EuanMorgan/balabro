@@ -14,6 +14,7 @@ public final class CoachRuntime {
     @ObservationIgnored private var state: CoachState
     @ObservationIgnored private let coach: Coach
     @ObservationIgnored private let store: RunStore
+    @ObservationIgnored private let settings: SharedFiles
     @ObservationIgnored private let claude: ClaudeInvocation?
     @ObservationIgnored private let scorer: Scorer?
     @ObservationIgnored private var turns: [TurnID: Task<Void, Never>] = [:]
@@ -21,14 +22,13 @@ public final class CoachRuntime {
     @ObservationIgnored private var savesRoot: URL?
     @ObservationIgnored private var shutDown = false
 
-    private static let goalKey = "goal"
     /// `--resume` only finds sessions filed under the cwd the CLI ran in, so every turn uses this one.
     static let conversations = Platform.dataFolder.appending(path: "conversations")
 
-    init(coach: Coach, store: RunStore, claude: ClaudeInvocation?, scorer: Scorer?, capture: @escaping @Sendable () async -> Data?) {
-        let goal = UserDefaults.standard.string(forKey: Self.goalKey).flatMap(CoachGoal.init) ?? .win
-        let state = CoachState(restoring: store.loadAll(), goal: goal)
-        (self.coach, self.store, self.claude, self.scorer, self.capture, self.state, self.view) = (coach, store, claude, scorer, capture, state, state.view)
+    init(coach: Coach, store: RunStore, settings: SharedFiles, claude: ClaudeInvocation?, scorer: Scorer?, capture: @escaping @Sendable () async -> Data?) {
+        let state = CoachState(restoring: store.loadAll(), goal: Settings.load(from: settings).goal)
+        (self.coach, self.store, self.settings, self.claude, self.scorer, self.capture) = (coach, store, settings, claude, scorer, capture)
+        (self.state, self.view) = (state, state.view)
     }
 
     /// Consumes save events until the app quits. The watcher's first events are the saves already on disk,
@@ -43,7 +43,7 @@ public final class CoachRuntime {
     public func refresh() { send(.refresh) }
     public func adviseNextRun() { send(.adviseNextRun) }
     public func setGoal(_ goal: CoachGoal) {
-        UserDefaults.standard.set(goal.rawValue, forKey: Self.goalKey)
+        Settings(goal: goal).save(to: settings)
         send(.setGoal(goal))
     }
 

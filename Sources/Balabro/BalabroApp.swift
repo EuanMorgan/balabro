@@ -65,27 +65,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func launch() async {
-        let engine = await Engine.start(savesRoot: savesRoot, capture: GameWindow.capturePNG)
-        _ = await engine.game?.registerFont()
-        let overlay = OverlayPanel(runtime: engine.coach, pilot: engine.pilot, updater: updater)
-        overlay.orderFrontRegardless()
-        (self.engine, self.overlay) = (engine, overlay)
-        hotKey = HotKey(HotKey.default) { overlay.focusQuestionField() }
-        statusItem = makeStatusItem()
+        await startEngine()
+        _ = await engine?.game?.registerFont()
+        hotKey = HotKey(HotKey.default) { [weak self] in self?.overlay?.focusQuestionField() }
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem?.button?.image = NSImage(systemSymbolName: "suit.spade.fill", accessibilityDescription: "Balabro")
+        statusItem?.menu = makeMenu()
         if let updater { Task { await updater.watch() } }
     }
 
-    private func makeStatusItem() -> NSStatusItem {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "suit.spade.fill", accessibilityDescription: "Balabro")
+    private func startEngine() async {
+        let engine = await Engine.start(savesRoot: savesRoot, capture: GameWindow.capturePNG)
+        let overlay = OverlayPanel(runtime: engine.coach, pilot: engine.pilot, updater: updater)
+        overlay.orderFrontRegardless()
+        (self.engine, self.overlay) = (engine, overlay)
+    }
+
+    private func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "Show overlay", action: #selector(showOverlay), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Move overlay to the corner", action: #selector(moveOverlayToCorner), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Your stats", action: #selector(showStats), keyEquivalent: "").target = self
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Sync with another computer…", action: #selector(chooseSyncFolder), keyEquivalent: "").target = self
+        if let folder = engine?.machine.syncFolder {
+            let syncing = menu.addItem(withTitle: "Syncing through \(FileManager.default.displayName(atPath: folder.path))", action: nil, keyEquivalent: "")
+            syncing.isEnabled = false
+            menu.addItem(withTitle: "Stop syncing", action: #selector(stopSyncing), keyEquivalent: "").target = self
+        }
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Balabro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        item.menu = menu
-        return item
+        return menu
     }
 
     @objc private func showOverlay() { overlay?.orderFrontRegardless() }
@@ -93,6 +103,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func moveOverlayToCorner() {
         overlay?.moveToCorner()
         overlay?.orderFrontRegardless()
+    }
+
+    @objc private func chooseSyncFolder() {
+        let panel = NSOpenPanel()
+        (panel.canChooseDirectories, panel.canChooseFiles, panel.canCreateDirectories) = (true, false, true)
+        panel.message = "Choose a folder that iCloud Drive, OneDrive or Dropbox keeps the same on your other computer. Balabro keeps your runs in a Balabro folder inside it."
+        panel.prompt = "Sync Here"
+        let iCloudDrive = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Mobile Documents/com~apple~CloudDocs")
+        panel.directoryURL = engine?.machine.syncFolder ?? iCloudDrive
+        NSApp.activate()
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        Task { await setSyncFolder(folder) }
+    }
+
+    @objc private func stopSyncing() { Task { await setSyncFolder(nil) } }
+
+    /// A new engine, so nothing from the old place is left running.
+    private func setSyncFolder(_ folder: URL?) async {
+        guard let engine else { return }
+        await engine.shutdown()
+        do {
+            _ = try await engine.machine.syncing(with: folder)
+        } catch {
+            NSApp.activate()
+            NSAlert(error: error).runModal()
+        }
+        // The new panel can only take over the saved position once the old one gives up its name.
+        overlay?.setFrameAutosaveName("")
+        overlay?.orderOut(nil)
+        overlay = nil
+        statsWindow?.close()
+        await startEngine()
+        statusItem?.menu = makeMenu()
     }
 
     @objc private func showStats() {

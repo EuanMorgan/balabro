@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 public enum HostMessage: Sendable {
-    case hello(version: String, fontPath: String?)
+    case hello(version: String, fontPath: String?, syncFolder: String?)
     case coach(CoachView)
     case pilot(PilotView)
     /// Answered by `AppMessage.screenshot` with the same id.
@@ -12,6 +12,8 @@ public enum HostMessage: Sendable {
     case stats(StatsPage)
     /// A newer release with the Windows zip, which the app offers and installs itself.
     case update(AppRelease)
+    /// The answer to `AppMessage.setSyncFolder`, after which the app starts a new engine. `path` is the folder in use.
+    case syncFolderSet(path: String?, error: String?)
 
     public func line() throws -> Data { try jsonLine(self) }
 }
@@ -27,15 +29,16 @@ func jsonLine(_ value: some Encodable) throws -> Data {
 }
 
 extension HostMessage: Encodable {
-    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data }
+    private enum CodingKeys: String, CodingKey { case type, version, fontPath, syncFolder, view, id, data, path, error }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .hello(let version, let fontPath):
+        case .hello(let version, let fontPath, let syncFolder):
             try container.encode("hello", forKey: .type)
             try container.encode(version, forKey: .version)
             try container.encode(fontPath, forKey: .fontPath)
+            try container.encode(syncFolder, forKey: .syncFolder)
         case .coach(let view):
             try container.encode("coach", forKey: .type)
             try container.encode(view, forKey: .view)
@@ -51,6 +54,10 @@ extension HostMessage: Encodable {
         case .update(let release):
             try container.encode("update", forKey: .type)
             try release.encode(to: encoder)
+        case .syncFolderSet(let path, let error):
+            try container.encode("syncFolderSet", forKey: .type)
+            try container.encode(path, forKey: .path)
+            try container.encode(error, forKey: .error)
         }
     }
 }
@@ -67,6 +74,8 @@ public enum AppMessage: Sendable, Equatable {
     case dismissPilot
     case stats
     case screenshot(id: Int, png: Data?)
+    /// nil stops syncing.
+    case setSyncFolder(String?)
 
     public init?(line: String) {
         struct Fields: Decodable {
@@ -75,6 +84,7 @@ public enum AppMessage: Sendable, Equatable {
             var goal: CoachGoal?
             var id: Int?
             var png: Data?
+            var path: String?
         }
         guard let fields = try? JSONDecoder().decode(Fields.self, from: Data(line.utf8)) else { return nil }
         switch (fields.type, fields.question, fields.goal, fields.id) {
@@ -88,6 +98,7 @@ public enum AppMessage: Sendable, Equatable {
         case ("dismissPilot", _, _, _): self = .dismissPilot
         case ("stats", _, _, _): self = .stats
         case ("screenshot", _, _, let id?): self = .screenshot(id: id, png: fields.png)
+        case ("setSyncFolder", _, _, _): self = .setSyncFolder(fields.path)
         default: return nil
         }
     }
@@ -124,7 +135,7 @@ public final class HostLink {
     /// app's lines. Returns when the app closes stdin.
     public func serve(_ engine: Engine) async {
         let font = try? await engine.game?.extract("resources/fonts/m6x11plus.ttf")
-        send(.hello(version: Platform.version, fontPath: font.map(Platform.path)))
+        send(.hello(version: Platform.version, fontPath: font.map(Platform.path), syncFolder: engine.machine.syncFolder.map(Platform.path)))
         let watchers = [
             watch { .coach(engine.coach.view) },
             watch { .pilot(engine.pilot.view) },
@@ -162,7 +173,20 @@ public final class HostLink {
         case .stopPilot: engine.pilot.stop()
         case .dismissPilot: engine.pilot.dismiss()
         case .stats: send(.stats(engine.stats()))
+        case .setSyncFolder(let path): Task { await setSyncFolder(path, engine) }
         case .screenshot: break
+        }
+    }
+
+    /// Shuts the engine down first, so nothing it writes afterwards lands in the old place.
+    private func setSyncFolder(_ path: String?, _ engine: Engine) async {
+        await engine.shutdown()
+        do {
+            let machine = try await engine.machine.syncing(with: path.map { URL(filePath: $0) })
+            send(.syncFolderSet(path: machine.syncFolder.map(Platform.path), error: nil))
+        } catch {
+            Platform.log("Couldn't sync through \(path ?? "the data folder"): \(error)")
+            send(.syncFolderSet(path: engine.machine.syncFolder.map(Platform.path), error: "Couldn't sync through that folder. \(error.localizedDescription)"))
         }
     }
 

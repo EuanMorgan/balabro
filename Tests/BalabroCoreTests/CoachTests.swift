@@ -5,7 +5,7 @@ import Testing
 /// The coaching policy, event by event, through `Coach.reduce` only.
 @Suite
 struct CoachTests {
-    let coach = Coach(text: .missing)
+    let coach = Coach(text: .missing, machine: MachineID(rawValue: "mac"))
     func snap(_ name: String) throws -> RunSnapshot { try SaveFile.decode(Fixture.save(name), profile: 1) }
     /// Everything but `.save`, which follows each change to the run's progress counters.
     func actions(_ effects: [CoachEffect]) -> [CoachEffect] {
@@ -503,6 +503,98 @@ struct CoachTests {
         #expect(!second[0].contains(rulesNotice))
     }
 
+    /// A run whose one completed turn, on 02-hand, ended in session S0 on `machine`, as `RunStore` loads it.
+    func runCoached(on machine: String?) throws -> RunRecord {
+        var state = CoachState(restoring: [])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        let effects = coach.reduce(&state, .turnOutput(TurnID(0), .done("**Do this now:**\n1. Play the pair.", SessionID(rawValue: "S0"))))
+        var record = try #require(effects.compactMap { effect -> RunRecord? in if case .save(let record) = effect { record } else { nil } }.last)
+        record.headMachine = machine.map(MachineID.init)
+        return record
+    }
+
+    /// Opens Balabro on `record` and asks a question about the save it was coached on.
+    func asking(_ question: String, after record: RunRecord, _ state: inout CoachState) throws -> [TurnRequest] {
+        state = CoachState(restoring: [record])
+        _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
+        return starts(asking(&state, question))
+    }
+
+    let pairRetold = """
+        THE RUN SO FAR. This run was coached on the player's other computer, and that conversation isn't here. \
+        These are your answers from it, oldest first. Carry on from them.
+
+        Ante 1 · bl_small. You advised:
+        **Do this now:**
+        1. Play the pair.
+
+        PLAYER QUESTION: why the pair?
+        """
+
+    @Test func aSessionMadeOnThisComputerIsResumed() throws {
+        var state = CoachState(restoring: [])
+        let turns = try asking("why the pair?", after: runCoached(on: "mac"), &state)
+        #expect(turns.map(\.forkFrom) == [SessionID(rawValue: "S0")])
+        #expect(turns.map(\.message.text) == ["PLAYER QUESTION: why the pair?"])
+    }
+
+    @Test func aRunFromBeforeSyncingIsResumedAsBefore() throws {
+        var state = CoachState(restoring: [])
+        let turns = try asking("why the pair?", after: runCoached(on: nil), &state)
+        #expect(turns.map(\.forkFrom) == [SessionID(rawValue: "S0")])
+        #expect(turns.map(\.message.text) == ["PLAYER QUESTION: why the pair?"])
+    }
+
+    @Test func aSessionMadeOnAnotherComputerStartsAfreshWithTheRunSoFar() throws {
+        var state = CoachState(restoring: [])
+        let turns = try asking("why the pair?", after: runCoached(on: "pc"), &state)
+        #expect(turns.map(\.forkFrom) == [nil])
+        #expect(turns.map(\.message.text) == [pairRetold])
+    }
+
+    @Test func aFreshConversationIsNotToldTheRulesChanged() throws {
+        var state = CoachState(restoring: [])
+        var here = try runCoached(on: "mac"), there = try runCoached(on: "pc")
+        (here.rules, there.rules) = (nil, nil)
+        #expect(try asking("why the pair?", after: here, &state).map { $0.message.text.hasPrefix(rulesNotice) } == [true])
+        #expect(try asking("why the pair?", after: there, &state).map(\.message.text) == [pairRetold])
+    }
+
+    @Test func theFreshConversationBecomesThisComputers() throws {
+        var state = CoachState(restoring: [])
+        _ = try asking("why the pair?", after: runCoached(on: "pc"), &state)
+        let saved = coach.reduce(&state, .turnOutput(TurnID(1), .done("It's the best hand.", SessionID(rawValue: "S1"))))
+        let record = try #require(saved.compactMap { effect -> RunRecord? in if case .save(let record) = effect { record } else { nil } }.last)
+        #expect(record.head == SessionID(rawValue: "S1"))
+        #expect(record.headMachine == MachineID(rawValue: "mac"))
+        let next = starts(asking(&state, "and then?"))
+        #expect(next.map(\.forkFrom) == [SessionID(rawValue: "S1")])
+        #expect(next.map(\.message.text) == ["PLAYER QUESTION: and then?"])
+    }
+
+    @Test func aLongRunRetellsOnlyItsNewestAnswers() throws {
+        var state = CoachState(restoring: [])
+        var record = try runCoached(on: "pc")
+        let (a, b, c) = (String(repeating: "a", count: 5000), String(repeating: "b", count: 5000), String(repeating: "c", count: 5000))
+        record.transcript = try JSONDecoder().decode([Exchange].self, from: Data("""
+            [{"title":"Shop","advice":"\(a)"},{"title":"Blind","advice":"\(b)"},{"title":"why?","advice":"\(c)","isQuestion":true}]
+            """.utf8))
+        let turns = try asking("and now?", after: record, &state)
+        #expect(turns.map(\.message.text) == ["""
+            THE RUN SO FAR. This run was coached on the player's other computer, and that conversation isn't here. \
+            These are your answers from it, oldest first, leaving out the 1 before them. Carry on from them.
+
+            Blind. You advised:
+            \(b)
+
+            The player asked: why?
+            You replied:
+            \(c)
+
+            PLAYER QUESTION: and now?
+            """])
+    }
+
     @Test func replyWithNewStepsReplacesTheGoal() throws {
         var state = CoachState(restoring: [])
         _ = coach.reduce(&state, .saveWritten(try snap("02-hand")))
@@ -801,7 +893,7 @@ struct CoachTests {
         effects.compactMap { if case .save(let record) = $0 { record.predictions } else { nil } }
     }
 
-    var scoringCoach: Coach { Coach(text: .missing, scoreWait: .seconds(8)) }
+    var scoringCoach: Coach { Coach(text: .missing, machine: MachineID(rawValue: "mac"), scoreWait: .seconds(8)) }
 
     func scoreRequests(_ effects: [CoachEffect]) -> [ScoreID] {
         effects.compactMap { if case .scoreSave(let id, _, _) = $0 { id } else { nil } }

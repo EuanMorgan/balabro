@@ -18,7 +18,7 @@ public class WireTests
     public void EveryGoldenFileIsTested()
     {
         var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "wire"), "*.json").Select(Path.GetFileNameWithoutExtension).OrderBy(n => n);
-        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "stats", "stats-before-any-run", "update" };
+        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "stats", "stats-before-any-run", "sync-folder-set", "update" };
         Assert.Equal(tested, files);
     }
 
@@ -28,6 +28,15 @@ public class WireTests
         var hello = Assert.IsType<Hello>(Golden("hello"));
         Assert.Equal("1.2.3", hello.Version);
         Assert.Equal(@"C:\Users\player\AppData\Local\Balabro\game\1730000000\resources\fonts\m6x11plus.ttf", hello.FontPath);
+        Assert.Equal(@"C:\Users\player\iCloudDrive", hello.SyncFolder);
+    }
+
+    [Fact]
+    public void SyncFolderSet()
+    {
+        var set = Assert.IsType<SyncFolderSet>(Golden("sync-folder-set"));
+        Assert.Null(set.Path);
+        Assert.Equal("Couldn't sync through that folder. You don't have permission.", set.Error);
     }
 
     [Fact]
@@ -207,6 +216,8 @@ public class WireTests
         Assert.Equal("""{"type":"stats"}""", Wire.Stats());
         Assert.Equal("""{"type":"screenshot","id":2,"png":"iVBO"}""", Wire.Screenshot(2, new byte[] { 0x89, 0x50, 0x4E }));
         Assert.Equal("""{"type":"screenshot","id":2,"png":null}""", Wire.Screenshot(2, null));
+        Assert.Equal("""{"type":"setSyncFolder","path":"C:\\Users\\player\\iCloudDrive"}""", Wire.SetSyncFolder(@"C:\Users\player\iCloudDrive"));
+        Assert.Equal("""{"type":"setSyncFolder","path":null}""", Wire.SetSyncFolder(null));
     }
 
     [Fact]

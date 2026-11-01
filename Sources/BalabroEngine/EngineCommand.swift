@@ -43,7 +43,7 @@ public enum EngineCommand {
             return 0
         }
         var state = CoachState(restoring: [])
-        _ = Coach(text: text).reduce(&state, .saveWritten(snapshot))
+        _ = Coach(text: text, machine: Machine.load().id).reduce(&state, .saveWritten(snapshot))
         print("Kind: \(label(decision.kind))\nTitle: \(state.view.headline)\n\n\(decision.prompt)")
         return 0
     }
@@ -67,7 +67,7 @@ public enum EngineCommand {
     /// Prints what the coach is told when suggesting the next run, from a saves folder such as `Platform.defaultSavesRoot`.
     private static func printNextRun(_ root: URL) async -> Int32 {
         var state = CoachState(restoring: [])
-        let coach = Coach(text: await GameInstall.find()?.loadText() ?? .missing)
+        let coach = Coach(text: await GameInstall.find()?.loadText() ?? .missing, machine: Machine.load().id)
         guard case .startTurn(let request)? = coach.reduce(&state, .progressRead(StatsData.progress(savesRoot: root))).first else {
             print("No profile in \(root.path)")
             return 1
@@ -92,7 +92,8 @@ public enum EngineCommand {
         func say(_ line: String) { try? FileHandle.standardOutput.write(contentsOf: Data((line + "\n").utf8)) }
         let game = GameInstall.find()
         let claude = await ClaudeLocator.resolve(override: nil, workingDirectory: PilotRuntime.conversations)
-        let pilot = PilotRuntime(pilot: Pilot(text: await game?.loadText() ?? .missing), results: .default, claude: claude, game: game)
+        let results = PilotResults(files: await Machine.load().open())
+        let pilot = PilotRuntime(pilot: Pilot(text: await game?.loadText() ?? .missing), results: results, claude: claude, game: game)
         pilot.start(goal: goal)
         var last = ""
         while pilot.view.status != .finished {

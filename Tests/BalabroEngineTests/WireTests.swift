@@ -29,7 +29,7 @@ struct WireTests {
         #expect(try decoder.decode(JSON.self, from: line) == decoder.decode(JSON.self, from: golden), "\(name).json differs from \(String(decoding: line, as: UTF8.self))")
     }
 
-    let coach = Coach(text: .missing)
+    let coach = Coach(text: .missing, machine: MachineID(rawValue: "mac"))
 
     func snap(_ name: String) throws -> RunSnapshot {
         try SaveFile.decode(Data(contentsOf: CoreFixture.url("saves/\(name).jkr")), profile: 1)
@@ -45,7 +45,9 @@ struct WireTests {
     }
 
     @Test func hello() throws {
-        try expectLine(.hello(version: "1.2.3", fontPath: #"C:\Users\player\AppData\Local\Balabro\game\1730000000\resources\fonts\m6x11plus.ttf"#), matches: "hello")
+        try expectLine(
+            .hello(version: "1.2.3", fontPath: #"C:\Users\player\AppData\Local\Balabro\game\1730000000\resources\fonts\m6x11plus.ttf"#, syncFolder: #"C:\Users\player\iCloudDrive"#),
+            matches: "hello")
     }
 
     @Test func waitingForARun() throws {
@@ -126,7 +128,7 @@ struct WireTests {
     }
 
     /// The driver's profile, and its run twice: once after the shop in ante 1, and once played to the end and removed.
-    @Test func stats() throws {
+    @Test func stats() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "balabro-stats-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root.appending(path: "1"), withIntermediateDirectories: true)
@@ -153,13 +155,13 @@ struct WireTests {
 
         let text = try GameText(enUSLua: #"return {descriptions={Back={b_red={name="Red Deck"}},Joker={j_gluttenous_joker={name="Gluttonous Joker"}}}}"#)
         let page = StatsPage(
-            StatsData.load(savesRoot: root, store: RunStore(directory: root.appending(path: "runs"))),
+            StatsData.load(savesRoot: root, store: RunStore(files: await SharedFiles.open(root))),
             text: text, locale: Locale(identifier: "en_GB"), timeZone: TimeZone(identifier: "UTC")!)
         try expectLine(.stats(page), matches: "stats")
     }
 
     /// All-time totals from a profile that predates Balabro, so no runs of its own.
-    @Test func statsBeforeAnyRun() throws {
+    @Test func statsBeforeAnyRun() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "balabro-stats-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root.appending(path: "2"), withIntermediateDirectories: true)
@@ -169,7 +171,7 @@ struct WireTests {
             """
         try Data(profile.utf8).write(to: root.appending(path: "2/profile.jkr"))
         let page = StatsPage(
-            StatsData.load(savesRoot: root, store: RunStore(directory: root.appending(path: "runs"))),
+            StatsData.load(savesRoot: root, store: RunStore(files: await SharedFiles.open(root))),
             text: .missing, locale: Locale(identifier: "en_GB"), timeZone: TimeZone(identifier: "UTC")!)
         try expectLine(.stats(page), matches: "stats-before-any-run")
     }
@@ -182,6 +184,10 @@ struct WireTests {
         try expectLine(.update(release), matches: "update")
     }
 
+    @Test func syncFolderSet() throws {
+        try expectLine(.syncFolderSet(path: nil, error: "Couldn't sync through that folder. You don't have permission."), matches: "sync-folder-set")
+    }
+
     @Test func appLines() {
         #expect(AppMessage(line: #"{"type":"ask","question":"why keep the 6?"}"#) == .ask("why keep the 6?"))
         #expect(AppMessage(line: #"{"type":"setGoal","goal":"naneinf"}"#) == .setGoal(.naneinf))
@@ -190,6 +196,8 @@ struct WireTests {
         #expect(AppMessage(line: #"{"type":"stats"}"#) == .stats)
         #expect(AppMessage(line: #"{"type":"screenshot","id":2,"png":"iVBO"}"#) == .screenshot(id: 2, png: Data([0x89, 0x50, 0x4E])))
         #expect(AppMessage(line: #"{"type":"screenshot","id":2,"png":null}"#) == .screenshot(id: 2, png: nil))
+        #expect(AppMessage(line: #"{"type":"setSyncFolder","path":"C:\\Users\\player\\iCloudDrive"}"#) == .setSyncFolder(#"C:\Users\player\iCloudDrive"#))
+        #expect(AppMessage(line: #"{"type":"setSyncFolder","path":null}"#) == .setSyncFolder(nil))
     }
 
     @Test func ignoresLinesItCannotActOn() {
