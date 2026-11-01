@@ -11,16 +11,14 @@ struct HostLinkTests {
         let host = HostLink(input: toEngine.fileHandleForReading, output: fromEngine.fileHandleForWriting, captureLimit: .milliseconds(200))
         var sent = LineReader.lines(from: fromEngine.fileHandleForReading).makeAsyncIterator()
         let listening = Task { await host.listen { _ in } }
-        // Without a limit, closing stdin is what ends the wait, so the elapsed time shows which one did.
+        // Without a limit, only closing stdin ends the wait, and the writes below then fail.
         let hangUp = Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(30))
             try? toEngine.fileHandleForWriting.close()
         }
         defer { hangUp.cancel() }
 
-        let started = ContinuousClock.now
         #expect(await host.screenshot() == nil)
-        #expect(ContinuousClock.now - started < .seconds(2))
         #expect(await sent.next() == #"{"id":0,"type":"capture"}"#)
 
         try toEngine.fileHandleForWriting.write(contentsOf: Data(#"{"type":"screenshot","id":0,"png":"AAAA"}"#.utf8 + [0x0A]))
