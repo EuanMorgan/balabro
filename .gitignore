@@ -7,3 +7,6 @@ dist/
 DerivedData/
 # swift test on Windows also writes the engine test bundle's Info.plist into the package root.
 /Info.plist
+# The Windows app's build output.
+windows/**/bin/
+windows/**/obj/
