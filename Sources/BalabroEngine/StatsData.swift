@@ -36,6 +36,9 @@ public struct StatsData: Sendable {
 /// Everything the stats window shows, in words and shares, so the Mac window and the Windows app draw the same page.
 /// A section the player has no data for is nil.
 public struct StatsPage: Sendable, Equatable, Encodable {
+    /// The menu item that opens the page, on the Mac's menu bar and in the Windows tray.
+    public static let menuTitle = "Your stats"
+
     public struct Totals: Sendable, Equatable, Encodable {
         public var title = "All time"
         public var tiles: [Tile]

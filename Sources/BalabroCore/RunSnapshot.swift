@@ -100,6 +100,10 @@ public struct BoosterPack: Sendable, Hashable, Codable {
     /// From `ability.extra` (cards shown) and `ability.choose` (cards you may take).
     public var cardsShown: Int
     public var picks: Int
+
+    public init(key: CenterKey, kind: PackKind, cardsShown: Int, picks: Int) {
+        (self.key, self.kind, self.cardsShown, self.picks) = (key, kind, cardsShown, picks)
+    }
 }
 
 public struct CenterKey: RawRepresentable, Sendable, Hashable, Codable, CustomStringConvertible {

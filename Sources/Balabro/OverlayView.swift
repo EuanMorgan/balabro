@@ -265,11 +265,11 @@ private struct UpdateRow: View {
         case .none:
             EmptyView()
         case .available(let release):
-            NoticeRow(message: "Version \(release.version) is available") { ChipButton("Update", action: install) }
+            NoticeRow(message: release.words.available) { ChipButton(release.words.update, action: install) }
         case .installing(let release):
-            NoticeRow(message: "Updating to \(release.version)…") { EmptyView() }
+            NoticeRow(message: release.words.installing) { EmptyView() }
         case .failed(let release):
-            NoticeRow(message: "Couldn't update") { ChipButton("Download") { NSWorkspace.shared.open(release.page) } }
+            NoticeRow(message: release.words.failed) { ChipButton(release.words.download) { NSWorkspace.shared.open(release.page) } }
         }
     }
 }

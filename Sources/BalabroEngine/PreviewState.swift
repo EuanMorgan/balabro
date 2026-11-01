@@ -17,6 +17,8 @@ public struct PreviewState: Sendable {
     public var showsWhy = false
     public var update: AppRelease?
 
+    public func line() throws -> Data { try jsonLine(self) }
+
     /// The pilot states come first, because their clocks run from `now` and must be drawn before it moves on.
     public static func all(now: Date) -> [PreviewState] {
         let run = BotStatus(ante: 4, round: 11, dollars: 41, bestHand: 4420, doing: "Discarding 3 cards, 61% to reach 2,442")
@@ -32,7 +34,17 @@ public struct PreviewState: Sendable {
             PreviewState(name: "overlay-cash", panel: .coach(CoachView(status: .ready, headline: "Ante 3 · Shop", advice: cash, thread: [], queuedQuestion: "Is $4 worth it?", problem: nil, canRetry: false)), height: 520, showsWhy: true),
             PreviewState(name: "overlay-update", panel: .coach(CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: [], queuedQuestion: nil, problem: nil, canRetry: false)), height: 420, update: release),
             PreviewState(name: "overlay-follow-up", panel: .coach(CoachView(status: .ready, headline: "Ante 1 · Big Blind", advice: finished, thread: thread, queuedQuestion: nil, problem: nil, canRetry: false)), height: 520),
+            PreviewState(name: "overlay-thinking-hand", panel: .coach(thinking(.playHand, headline: "Ante 1 · Big Blind")), height: 420),
+            PreviewState(name: "overlay-thinking-shop", panel: .coach(thinking(.shop, headline: "Ante 3 · Shop")), height: 420),
+            PreviewState(name: "overlay-thinking-blind", panel: .coach(thinking(.blindSelect, headline: "Ante 2 · Choose a blind")), height: 420),
+            PreviewState(name: "overlay-thinking-pack", panel: .coach(thinking(.openPack(arcana, from: .shop), headline: "Ante 2 · Arcana Pack")), height: 420),
         ]
+    }
+
+    private static let arcana = BoosterPack(key: CenterKey(rawValue: "p_arcana_normal_1"), kind: .arcana, cardsShown: 3, picks: 1)
+
+    private static func thinking(_ kind: Decision.Kind, headline: String) -> CoachView {
+        CoachView(status: .thinking, headline: headline, waitingOn: kind, advice: nil, thread: [], queuedQuestion: nil, problem: nil, canRetry: false)
     }
 
     private static let finished = Advice(

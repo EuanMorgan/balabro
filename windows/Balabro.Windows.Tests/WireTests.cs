@@ -18,7 +18,7 @@ public class WireTests
     public void EveryGoldenFileIsTested()
     {
         var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "wire"), "*.json").Select(Path.GetFileNameWithoutExtension).OrderBy(n => n);
-        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "stats", "stats-before-any-run", "sync-folder-set", "update" };
+        var tested = new[] { "capture", "coach-advice", "coach-no-screenshot", "coach-problem", "coach-ready", "coach-thinking", "coach-waiting", "hello", "pilot-failed", "pilot-playing", "preview-pilot", "preview-thinking", "preview-update", "stats", "stats-before-any-run", "sync-folder-set", "update" };
         Assert.Equal(tested, files);
     }
 
@@ -29,6 +29,15 @@ public class WireTests
         Assert.Equal("1.2.3", hello.Version);
         Assert.Equal(@"C:\Users\player\AppData\Local\Balabro\game\1730000000\resources\fonts\m6x11plus.ttf", hello.FontPath);
         Assert.Equal(@"C:\Users\player\iCloudDrive", hello.SyncFolder);
+        Assert.Equal("Your stats", hello.StatsMenuTitle);
+    }
+
+    [Fact]
+    public void TheStatsMenuItemsWordComesFromTheEngine()
+    {
+        var hello = Assert.IsType<Hello>(Wire.Decode("""{"type":"hello","version":"1","fontPath":null,"syncFolder":null,"statsMenuTitle":"Another word"}"""));
+        Assert.Equal("Another word", hello.StatsMenuTitle);
+        Assert.ThrowsAny<Exception>(() => Wire.Decode("""{"type":"hello","version":"1","fontPath":null,"syncFolder":null}"""));
     }
 
     [Fact]
@@ -199,6 +208,44 @@ public class WireTests
         Assert.Equal("0.3.0", offer.Version);
         Assert.Equal("https://github.com/EuanMorgan/balabro/releases/download/v0.3.0/Balabro-0.3.0-windows-x64.zip", offer.AssetUrl);
         Assert.Equal("https://github.com/EuanMorgan/balabro/releases/tag/v0.3.0", offer.PageUrl);
+        Assert.Equal("Version 0.3.0 is available", offer.Words.Available);
+        Assert.Equal("Update", offer.Words.Update);
+        Assert.Equal("Updating to 0.3.0…", offer.Words.Installing);
+        Assert.Equal("Couldn't update", offer.Words.Failed);
+        Assert.Equal("Download", offer.Words.Download);
+    }
+
+    private static PreviewLine GoldenPreview(string name) =>
+        Wire.DecodePreview(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "wire", name + ".json")).ReplaceLineEndings(" "));
+
+    [Fact]
+    public void PreviewWithAnUpdateRow()
+    {
+        var line = GoldenPreview("preview-update");
+        Assert.Equal(("overlay-update", 420.0, false), (line.Name, line.Height, line.ShowsWhy));
+        Assert.Equal("Ante 1 · Big Blind", Assert.IsType<CoachMessage>(line.Panel).View.Headline);
+        Assert.Equal("0.2.0", line.Update?.Version);
+        Assert.Equal("Version 0.2.0 is available", line.Update?.Words.Available);
+        Assert.Equal("https://github.com/EuanMorgan/balabro/releases/tag/v0.2.0", line.Update?.PageUrl);
+    }
+
+    [Fact]
+    public void PreviewOfThePilot()
+    {
+        var line = GoldenPreview("preview-pilot");
+        Assert.Equal(("pilot-playing", 300.0), (line.Name, line.Height));
+        Assert.Null(line.Update);
+        var view = Assert.IsType<PilotMessage>(line.Panel).View;
+        Assert.Equal("Discarding 3 cards, 61% to reach 2,442", view.Run?.Doing);
+        Assert.Equal(new DateTimeOffset(2026, 9, 21, 14, 11, 4, TimeSpan.Zero), view.StartedAt);
+    }
+
+    [Fact]
+    public void PreviewOfAnAnimation()
+    {
+        var view = Assert.IsType<CoachMessage>(GoldenPreview("preview-thinking").Panel).View;
+        Assert.Equal(DecisionKind.Shop, view.WaitingOn);
+        Assert.Equal(new[] { "Browsing the shelves", "Counting your money", "Weighing up the jokers" }, view.WaitingCaptions);
     }
 
     [Fact]

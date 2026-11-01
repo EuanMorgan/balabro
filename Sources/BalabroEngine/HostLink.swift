@@ -29,7 +29,7 @@ func jsonLine(_ value: some Encodable) throws -> Data {
 }
 
 extension HostMessage: Encodable {
-    private enum CodingKeys: String, CodingKey { case type, version, fontPath, syncFolder, view, id, data, path, error }
+    private enum CodingKeys: String, CodingKey { case type, version, fontPath, syncFolder, statsMenuTitle, view, id, data, path, error }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -39,6 +39,7 @@ extension HostMessage: Encodable {
             try container.encode(version, forKey: .version)
             try container.encode(fontPath, forKey: .fontPath)
             try container.encode(syncFolder, forKey: .syncFolder)
+            try container.encode(StatsPage.menuTitle, forKey: .statsMenuTitle)
         case .coach(let view):
             try container.encode("coach", forKey: .type)
             try container.encode(view, forKey: .view)

@@ -12,7 +12,7 @@ namespace Balabro.Windows;
 public abstract record HostMessage;
 
 /// `SyncFolder` is null when this computer doesn't sync.
-public sealed record Hello(string Version, string? FontPath, string? SyncFolder) : HostMessage;
+public sealed record Hello(string Version, string? FontPath, string? SyncFolder, string StatsMenuTitle) : HostMessage;
 
 public sealed record CoachMessage(CoachView View) : HostMessage;
 
@@ -25,7 +25,17 @@ public sealed record CaptureRequest(int Id) : HostMessage;
 public sealed record StatsMessage(StatsPage Page) : HostMessage;
 
 /// A newer release with the Windows zip. The app offers it and installs it itself.
-public sealed record UpdateOffer(string Version, string AssetUrl, string PageUrl) : HostMessage;
+public sealed record UpdateOffer(string Version, string AssetUrl, string PageUrl, UpdateWords Words) : HostMessage;
+
+public sealed record UpdateWords
+{
+    public required string Available { get; init; }
+    public required string Update { get; init; }
+    public required string Installing { get; init; }
+    public required string Failed { get; init; }
+    public required string Download { get; init; }
+}
+
 /// The answer to a `setSyncFolder` line. The app then restarts the engine, which reads the runs from `Path`.
 public sealed record SyncFolderSet(string? Path, string? Error) : HostMessage;
 
@@ -236,6 +246,9 @@ public sealed record RunRow
     public required string Details { get; init; }
 }
 
+/// One line of `balabro-engine --print-preview-views`: a panel state to draw for a side-by-side check with the Mac's.
+public sealed record PreviewLine(string Name, HostMessage Panel, double Height, bool ShowsWhy, UpdateOffer? Update);
+
 public static class Wire
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -253,19 +266,35 @@ public static class Wire
         var type = root.GetProperty("type").GetString();
         return type switch
         {
-            "hello" => new Hello(root.GetProperty("version").GetString() ?? "dev", OptionalString(root, "fontPath"), OptionalString(root, "syncFolder")),
+            "hello" => new Hello(root.GetProperty("version").GetString() ?? "dev", OptionalString(root, "fontPath"), OptionalString(root, "syncFolder"),
+                root.GetProperty("statsMenuTitle").GetString() ?? throw new JsonException("No statsMenuTitle")),
             "coach" => new CoachMessage(View<CoachView>(root)),
             "pilot" => new PilotMessage(View<PilotView>(root)),
             "capture" => new CaptureRequest(root.GetProperty("id").GetInt32()),
-            "update" => new UpdateOffer(
-                root.GetProperty("version").GetString() ?? throw new JsonException("No version"),
-                root.GetProperty("assetURL").GetString() ?? throw new JsonException("No assetURL"),
-                root.GetProperty("pageURL").GetString() ?? throw new JsonException("No pageURL")),
+            "update" => Offer(root),
             "stats" => new StatsMessage(root.GetProperty("data").Deserialize<StatsPage>(Options) ?? throw new JsonException("Empty stats")),
             "syncFolderSet" => new SyncFolderSet(OptionalString(root, "path"), OptionalString(root, "error")),
             _ => throw new JsonException($"Unknown line type {type}"),
         };
     }
+
+    public static PreviewLine DecodePreview(string line)
+    {
+        using var document = JsonDocument.Parse(line);
+        var root = document.RootElement;
+        return new PreviewLine(
+            root.GetProperty("name").GetString() ?? throw new JsonException("No name"),
+            Decode(line),
+            root.GetProperty("height").GetDouble(),
+            root.GetProperty("showsWhy").GetBoolean(),
+            root.TryGetProperty("update", out var update) ? Offer(update) : null);
+    }
+
+    private static UpdateOffer Offer(JsonElement release) => new(
+        release.GetProperty("version").GetString() ?? throw new JsonException("No version"),
+        release.GetProperty("assetURL").GetString() ?? throw new JsonException("No assetURL"),
+        release.GetProperty("pageURL").GetString() ?? throw new JsonException("No pageURL"),
+        release.GetProperty("words").Deserialize<UpdateWords>(Options) ?? throw new JsonException("No words"));
 
     private static string? OptionalString(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

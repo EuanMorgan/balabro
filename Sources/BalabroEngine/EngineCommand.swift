@@ -110,7 +110,7 @@ public enum EngineCommand {
 
     private static func printPreviewViews() -> Int32 {
         for state in PreviewState.all(now: .now) {
-            guard let line = try? jsonLine(state) else { return 1 }
+            guard let line = try? state.line() else { return 1 }
             try? FileHandle.standardOutput.write(contentsOf: line)
         }
         return 0

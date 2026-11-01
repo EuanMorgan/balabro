@@ -22,7 +22,10 @@ struct WireTests {
     }
 
     func expectLine(_ message: HostMessage, matches name: String) throws {
-        let line = try message.line()
+        try expectLine(message.line(), matches: name)
+    }
+
+    func expectLine(_ line: Data, matches name: String) throws {
         #expect(line.last == UInt8(ascii: "\n") && !line.dropLast().contains(UInt8(ascii: "\n")), "one line per message")
         let golden = try Data(contentsOf: #require(Bundle.module.url(forResource: "Fixtures/wire/\(name)", withExtension: "json")))
         let decoder = JSONDecoder()
@@ -186,6 +189,14 @@ struct WireTests {
 
     @Test func syncFolderSet() throws {
         try expectLine(.syncFolderSet(path: nil, error: "Couldn't sync through that folder. You don't have permission."), matches: "sync-folder-set")
+    }
+
+    @Test func previewLines() throws {
+        let states = PreviewState.all(now: Date(timeIntervalSince1970: 1_790_000_000))
+        func state(_ name: String) throws -> PreviewState { try #require(states.first { $0.name == name }) }
+        try expectLine(state("overlay-update").line(), matches: "preview-update")
+        try expectLine(state("pilot-playing").line(), matches: "preview-pilot")
+        try expectLine(state("overlay-thinking-shop").line(), matches: "preview-thinking")
     }
 
     @Test func appLines() {

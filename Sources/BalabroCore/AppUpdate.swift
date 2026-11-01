@@ -29,6 +29,19 @@ public struct AppRelease: Sendable, Equatable {
     public let page: URL
 
     public init(version: AppVersion, download: URL, page: URL) { (self.version, self.download, self.page) = (version, download, page) }
+
+    public var words: UpdateWords {
+        UpdateWords(available: "Version \(version) is available", update: "Update", installing: "Updating to \(version)…", failed: "Couldn't update", download: "Download")
+    }
+}
+
+/// The update row's words, which both apps show.
+public struct UpdateWords: Sendable, Equatable, Encodable {
+    public let available: String
+    public let update: String
+    public let installing: String
+    public let failed: String
+    public let download: String
 }
 
 /// The zip a release must carry for each app to update to it.

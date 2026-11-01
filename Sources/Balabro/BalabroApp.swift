@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Show overlay", action: #selector(showOverlay), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Move overlay to the corner", action: #selector(moveOverlayToCorner), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Your stats", action: #selector(showStats), keyEquivalent: "").target = self
+        menu.addItem(withTitle: StatsPage.menuTitle, action: #selector(showStats), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Sync with another computer…", action: #selector(chooseSyncFolder), keyEquivalent: "").target = self
         if let folder = engine?.machine.syncFolder {
