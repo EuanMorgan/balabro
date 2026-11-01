@@ -20,6 +20,9 @@ public sealed record PilotMessage(PilotView View) : HostMessage;
 /// Answered with a `screenshot` line carrying the same id.
 public sealed record CaptureRequest(int Id) : HostMessage;
 
+/// The answer to a `stats` line.
+public sealed record StatsMessage(StatsPage Page) : HostMessage;
+
 public enum CoachStatus { WaitingForRun, LookingAtPack, Thinking, Answering, Ready }
 
 public enum CoachGoal { Win, Naneinf }
@@ -156,6 +159,77 @@ public sealed record BestTime
     public required string Line { get; init; }
 }
 
+/// Everything the stats window shows. A section the player has no data for is null.
+public sealed record StatsPage
+{
+    public required string Title { get; init; }
+    public StatsTotals? Totals { get; init; }
+    public AnteChart? AnteChart { get; init; }
+    public BarList? Hands { get; init; }
+    public BarList? Jokers { get; init; }
+    public required RunList Runs { get; init; }
+}
+
+public sealed record StatsTotals
+{
+    public required string Title { get; init; }
+    public required List<StatsTile> Tiles { get; init; }
+}
+
+public sealed record StatsTile
+{
+    public required string Label { get; init; }
+    public required string Value { get; init; }
+    public required bool IsMoney { get; init; }
+}
+
+public sealed record AnteChart
+{
+    public required string Title { get; init; }
+    public required string Caption { get; init; }
+    /// Oldest first.
+    public required List<AnteColumn> Columns { get; init; }
+}
+
+public sealed record AnteColumn
+{
+    public required string Ante { get; init; }
+    /// The column's height as a share of the tallest the chart can draw, from 0 to 1.
+    public required double Share { get; init; }
+    public required string Help { get; init; }
+}
+
+public sealed record BarList
+{
+    public required string Title { get; init; }
+    public required List<Bar> Bars { get; init; }
+}
+
+public sealed record Bar
+{
+    public required string Label { get; init; }
+    public required string Value { get; init; }
+    /// The bar's length as a share of the longest the chart can draw, from 0 to 1.
+    public required double Share { get; init; }
+    public required string Help { get; init; }
+}
+
+public sealed record RunList
+{
+    public required string Title { get; init; }
+    public string? Empty { get; init; }
+    public required List<RunRow> Rows { get; init; }
+}
+
+public sealed record RunRow
+{
+    public required string Id { get; init; }
+    public required string Outcome { get; init; }
+    public required string Deck { get; init; }
+    public required string Date { get; init; }
+    public required string Details { get; init; }
+}
+
 public static class Wire
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -179,6 +253,7 @@ public static class Wire
             "coach" => new CoachMessage(View<CoachView>(root)),
             "pilot" => new PilotMessage(View<PilotView>(root)),
             "capture" => new CaptureRequest(root.GetProperty("id").GetInt32()),
+            "stats" => new StatsMessage(root.GetProperty("data").Deserialize<StatsPage>(Options) ?? throw new JsonException("Empty stats")),
             _ => throw new JsonException($"Unknown line type {type}"),
         };
     }
@@ -195,6 +270,7 @@ public static class Wire
     public static string PlayForMe(CoachGoal goal) => Line(new { type = "playForMe", goal = Name(goal) });
     public static string StopPilot() => Line(new { type = "stopPilot" });
     public static string DismissPilot() => Line(new { type = "dismissPilot" });
+    public static string Stats() => Line(new { type = "stats" });
     public static string Screenshot(int id, byte[]? png) => Line(new { type = "screenshot", id, png = png is null ? null : Convert.ToBase64String(png) });
 
     private static string Name(CoachGoal goal) => goal == CoachGoal.Naneinf ? "naneinf" : "win";

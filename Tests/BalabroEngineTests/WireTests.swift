@@ -125,11 +125,61 @@ struct WireTests {
         try expectLine(.capture(id: 3), matches: "capture")
     }
 
+    /// The driver's profile, and its run twice: once after the shop in ante 1, and once played to the end and removed.
+    @Test func stats() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "balabro-stats-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appending(path: "1"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: root.appending(path: "runs"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: CoreFixture.url("profiles/driver.jkr"), to: root.appending(path: "1/profile.jkr"))
+
+        var state = CoachState(restoring: [])
+        var record: RunRecord?
+        func play(_ saves: [String]) throws {
+            for name in saves {
+                for case .save(let saved) in coach.reduce(&state, .saveWritten(try snap(name))) { record = saved }
+            }
+        }
+        func store(_ name: String, playedAt seconds: TimeInterval) throws {
+            let file = root.appending(path: "runs/\(name).json")
+            try #require(record).json().write(to: file)
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: seconds)], ofItemAtPath: file.path)
+        }
+        try play(["01-blind-select", "02-hand", "03-hand-after-discard", "04-round-eval", "05-shop"])
+        try store("early", playedAt: 1_790_000_000)
+        try play(["06-shop-reroll", "07-pack-opening", "08-pack-closed", "09-blind-select", "10-hand", "11-round-eval", "12-shop"])
+        for case .save(let saved) in coach.reduce(&state, .saveRemoved(profile: 1)) { record = saved }
+        try store("ended", playedAt: 1_790_090_000)
+
+        let text = try GameText(enUSLua: #"return {descriptions={Back={b_red={name="Red Deck"}},Joker={j_gluttenous_joker={name="Gluttonous Joker"}}}}"#)
+        let page = StatsPage(
+            StatsData.load(savesRoot: root, store: RunStore(directory: root.appending(path: "runs"))),
+            text: text, locale: Locale(identifier: "en_GB"), timeZone: TimeZone(identifier: "UTC")!)
+        try expectLine(.stats(page), matches: "stats")
+    }
+
+    /// All-time totals from a profile that predates Balabro, so no runs of its own.
+    @Test func statsBeforeAnyRun() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "balabro-stats-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root.appending(path: "2"), withIntermediateDirectories: true)
+        let profile = """
+            return {["career_stats"]={["c_wins"]=2,["c_losses"]=11,["c_rounds"]=111,},
+            ["high_scores"]={["hand"]={["amt"]=32163,},["most_money"]={["amt"]=1083,},["furthest_ante"]={["amt"]=6,},},}
+            """
+        try Data(profile.utf8).write(to: root.appending(path: "2/profile.jkr"))
+        let page = StatsPage(
+            StatsData.load(savesRoot: root, store: RunStore(directory: root.appending(path: "runs"))),
+            text: .missing, locale: Locale(identifier: "en_GB"), timeZone: TimeZone(identifier: "UTC")!)
+        try expectLine(.stats(page), matches: "stats-before-any-run")
+    }
+
     @Test func appLines() {
         #expect(AppMessage(line: #"{"type":"ask","question":"why keep the 6?"}"#) == .ask("why keep the 6?"))
         #expect(AppMessage(line: #"{"type":"setGoal","goal":"naneinf"}"#) == .setGoal(.naneinf))
         #expect(AppMessage(line: #"{"type":"playForMe","goal":"win"}"#) == .playForMe(.win))
         #expect(AppMessage(line: #"{"type":"stopPilot"}"#) == .stopPilot)
+        #expect(AppMessage(line: #"{"type":"stats"}"#) == .stats)
         #expect(AppMessage(line: #"{"type":"screenshot","id":2,"png":"iVBO"}"#) == .screenshot(id: 2, png: Data([0x89, 0x50, 0x4E])))
         #expect(AppMessage(line: #"{"type":"screenshot","id":2,"png":null}"#) == .screenshot(id: 2, png: nil))
     }

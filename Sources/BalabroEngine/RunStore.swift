@@ -6,6 +6,8 @@ import Foundation
 public struct RunStore: Sendable {
     let directory: URL
 
+    public init(directory: URL) { self.directory = directory }
+
     public static var `default`: RunStore { RunStore(directory: Platform.dataFolder.appending(path: "runs")) }
 
     /// Unreadable files are skipped and logged, not fatal: losing one run's history beats not starting.

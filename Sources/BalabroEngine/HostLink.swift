@@ -8,6 +8,8 @@ public enum HostMessage: Sendable {
     case pilot(PilotView)
     /// Answered by `AppMessage.screenshot` with the same id.
     case capture(id: Int)
+    /// The answer to `AppMessage.stats`.
+    case stats(StatsPage)
 
     /// JSON with no newline inside, then a newline.
     public func line() throws -> Data {
@@ -21,7 +23,7 @@ public enum HostMessage: Sendable {
 }
 
 extension HostMessage: Encodable {
-    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id }
+    private enum CodingKeys: String, CodingKey { case type, version, fontPath, view, id, data }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -39,11 +41,14 @@ extension HostMessage: Encodable {
         case .capture(let id):
             try container.encode("capture", forKey: .type)
             try container.encode(id, forKey: .id)
+        case .stats(let page):
+            try container.encode("stats", forKey: .type)
+            try container.encode(page, forKey: .data)
         }
     }
 }
 
-/// One line from the Windows app: a player's action, named after the runtime method the Mac panel calls, or a screenshot.
+/// One line from the Windows app: a player's action, named after the runtime method the Mac panel calls, a screenshot, or a request for the stats page.
 public enum AppMessage: Sendable, Equatable {
     case ask(String)
     case retry
@@ -53,6 +58,7 @@ public enum AppMessage: Sendable, Equatable {
     case playForMe(CoachGoal)
     case stopPilot
     case dismissPilot
+    case stats
     case screenshot(id: Int, png: Data?)
 
     public init?(line: String) {
@@ -73,6 +79,7 @@ public enum AppMessage: Sendable, Equatable {
         case ("playForMe", _, let goal?, _): self = .playForMe(goal)
         case ("stopPilot", _, _, _): self = .stopPilot
         case ("dismissPilot", _, _, _): self = .dismissPilot
+        case ("stats", _, _, _): self = .stats
         case ("screenshot", _, _, let id?): self = .screenshot(id: id, png: fields.png)
         default: return nil
         }
@@ -143,6 +150,7 @@ public final class HostLink {
         case .playForMe(let goal): engine.pilot.start(goal: goal)
         case .stopPilot: engine.pilot.stop()
         case .dismissPilot: engine.pilot.dismiss()
+        case .stats: send(.stats(engine.stats()))
         case .screenshot: break
         }
     }

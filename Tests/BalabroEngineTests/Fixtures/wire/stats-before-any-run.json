@@ -1,0 +1,46 @@
+{
+  "data": {
+    "runs": {
+      "empty": "Your runs appear here as you play them.",
+      "rows": [],
+      "title": "Runs Balabro has seen"
+    },
+    "title": "Balabro stats",
+    "totals": {
+      "tiles": [
+        {
+          "isMoney": false,
+          "label": "Runs",
+          "value": "13"
+        },
+        {
+          "isMoney": false,
+          "label": "Wins",
+          "value": "2"
+        },
+        {
+          "isMoney": false,
+          "label": "Rounds",
+          "value": "111"
+        },
+        {
+          "isMoney": false,
+          "label": "Best ante",
+          "value": "6"
+        },
+        {
+          "isMoney": false,
+          "label": "Best hand",
+          "value": "32,163"
+        },
+        {
+          "isMoney": true,
+          "label": "Most money",
+          "value": "$1,083"
+        }
+      ],
+      "title": "All time"
+    }
+  },
+  "type": "stats"
+}

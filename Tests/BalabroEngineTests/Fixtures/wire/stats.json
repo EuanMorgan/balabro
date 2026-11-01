@@ -1,0 +1,63 @@
+{
+  "data": {
+    "anteChart": {
+      "caption": "Ante reached in each run",
+      "columns": [
+        {
+          "ante": "1",
+          "help": "Ante 1, Red Deck, 21 Sep 2026",
+          "share": 0.125
+        },
+        {
+          "ante": "1",
+          "help": "Ante 1, Red Deck, 22 Sep 2026",
+          "share": 0.125
+        }
+      ],
+      "title": "How far you got, oldest to newest"
+    },
+    "hands": {
+      "bars": [
+        {
+          "help": "High Card: 2",
+          "label": "High Card",
+          "share": 1,
+          "value": "2"
+        }
+      ],
+      "title": "Hands you play most"
+    },
+    "jokers": {
+      "bars": [
+        {
+          "help": "Gluttonous Joker: 1",
+          "label": "Gluttonous Joker",
+          "share": 1,
+          "value": "1"
+        }
+      ],
+      "title": "Jokers you use most"
+    },
+    "runs": {
+      "rows": [
+        {
+          "date": "22 Sep 2026 at 15:13",
+          "deck": "Red Deck",
+          "details": "Best hand 16 · peak $95 · mostly High Card · Gluttonous Joker",
+          "id": "ended.json",
+          "outcome": "Reached Ante 1"
+        },
+        {
+          "date": "21 Sep 2026 at 14:13",
+          "deck": "Red Deck",
+          "details": "Best hand 16 · peak $4 · mostly High Card",
+          "id": "early.json",
+          "outcome": "In progress, Ante 1"
+        }
+      ],
+      "title": "Runs Balabro has seen"
+    },
+    "title": "Balabro stats"
+  },
+  "type": "stats"
+}
